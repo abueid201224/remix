@@ -1,0 +1,80 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default-deny catch-all safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Hardened ABAC Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Health check endpoint
+    match /test/connection {
+      allow read: if true;
+    }
+
+    // User Settings Collection
+    match /users/{userId}/settings/{settingId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isValidId(settingId);
+      allow delete: if isOwner(userId);
+    }
+
+    // Return Reports (RMA / Quality Inspection)
+    match /returns/{returnId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(returnId) && incoming().userId == request.auth.uid;
+      allow update: if isSignedIn() && (existing().userId == request.auth.uid || request.auth.token.email == 'ahmed.hamada.gana.2012@gmail.com');
+      allow delete: if isSignedIn() && (existing().userId == request.auth.uid || request.auth.token.email == 'ahmed.hamada.gana.2012@gmail.com');
+    }
+
+    // Audit Discrepancies
+    match /audit_discrepancies/{discrepancyId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(discrepancyId) && incoming().userId == request.auth.uid;
+      allow update: if isSignedIn() && (existing().userId == request.auth.uid || request.auth.token.email == 'ahmed.hamada.gana.2012@gmail.com');
+      allow delete: if isSignedIn() && (existing().userId == request.auth.uid || request.auth.token.email == 'ahmed.hamada.gana.2012@gmail.com');
+    }
+
+    // Inbound Receiving Reports
+    match /receiving_reports/{reportId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(reportId) && incoming().userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && (existing().userId == request.auth.uid || request.auth.token.email == 'ahmed.hamada.gana.2012@gmail.com');
+    }
+
+    // Inventory Count Reports
+    match /inventory_reports/{inventoryId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(inventoryId) && incoming().userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && (existing().userId == request.auth.uid || request.auth.token.email == 'ahmed.hamada.gana.2012@gmail.com');
+    }
+
+    // Picking Waves
+    match /picking_waves/{waveId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(waveId) && incoming().userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && (existing().userId == request.auth.uid || request.auth.token.email == 'ahmed.hamada.gana.2012@gmail.com');
+    }
+  }
+}

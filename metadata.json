@@ -1,0 +1,10 @@
+{
+  "name": "Remix Offline Invoice Barcode Auditor",
+  "description": "100% offline warehouse and logistics invoice auditor with 1D USB/Bluetooth barcode scanner keyboard wedge support, Excel sync, real-time quantity/item verification, and discrepancy reporting.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
