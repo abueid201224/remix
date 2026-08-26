@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json.schemastore.org/web-manifest-combined.json",
+  "id": "/",
+  "name": "مدير عمليات المستودع وتدقيق الفواتير | Smart WMS Auditor",
+  "short_name": "مدقق المستودع",
+  "description": "منظومة متكاملة لتدقيق الفواتير، الاستلام، المرتجعات، الجرد، والانتقاء 100% أوفلاين مع قارئ الباركود ومزامنة الإكسيل",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "minimal-ui",
+    "browser"
+  ],
+  "orientation": "any",
+  "theme_color": "#020617",
+  "background_color": "#020617",
+  "lang": "ar",
+  "dir": "rtl",
+  "categories": [
+    "business",
+    "productivity",
+    "utilities",
+    "finance"
+  ],
+  "prefer_related_applications": false,
+  "launch_handler": {
+    "client_mode": "auto"
+  },
+  "handle_links": "preferred",
+  "icons": [
+    {
+      "src": "/icon-48.png",
+      "sizes": "48x48",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/maskable-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-desktop.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "لوحة التحكم وتدقيق المستودع على الحاسوب والأجهزة اللوحية"
+    },
+    {
+      "src": "/screenshot-mobile.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "شاشة تدقيق ومسح الباركود على أجهزة الهاتف والـ PDA وماسحات الليزر"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "الرئيسية",
+      "short_name": "الرئيسية",
+      "description": "لوحة الخدمات المركزية",
+      "url": "/?tab=welcome",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "فحص وتدقيق الفواتير",
+      "short_name": "التدقيق",
+      "description": "فتح شاشة المسح والتدقيق بالباركود",
+      "url": "/?tab=audit",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "الاستلام والمطابقة",
+      "short_name": "الاستلام",
+      "description": "استلام الشحنات ومطابقة أوامر الشراء",
+      "url": "/?tab=receiving",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "قائمة الانتقاء والتجهيز",
+      "short_name": "الانتقاء",
+      "description": "تجهيز طلبيات وأوردرات الفواتير",
+      "url": "/?tab=picking",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "الجرد الدوري وتجميع العبوات",
+      "short_name": "الجرد",
+      "description": "جرد المخزون وحساب الفروقات",
+      "url": "/?tab=inventory",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "تقرير الأخطاء والفروقات",
+      "short_name": "الأخطاء",
+      "description": "استعراض وتصدير تقرير النواقص والانحرافات",
+      "url": "/?tab=errors",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

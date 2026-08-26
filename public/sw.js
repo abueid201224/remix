@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v3-offline-wms-pwa';
+const CACHE_VERSION = 'v4-offline-wms-pwa';
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `runtime-${CACHE_VERSION}`;
 
@@ -16,6 +16,8 @@ const PRECACHE_URLS = [
   '/icon-384.png',
   '/icon-512.png',
   '/maskable-icon-512.png',
+  '/screenshot-desktop.png',
+  '/screenshot-mobile.png',
   '/icon.svg'
 ];
 

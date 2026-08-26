@@ -1,10 +1,10 @@
 {
   "$schema": "https://json.schemastore.org/web-manifest-combined.json",
-  "id": "/?source=pwa",
+  "id": "/",
   "name": "مدير عمليات المستودع وتدقيق الفواتير | Smart WMS Auditor",
   "short_name": "مدقق المستودع",
   "description": "منظومة متكاملة لتدقيق الفواتير، الاستلام، المرتجعات، الجرد، والانتقاء 100% أوفلاين مع قارئ الباركود ومزامنة الإكسيل",
-  "start_url": "/?source=pwa",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "display_override": [
@@ -25,6 +25,10 @@
     "finance"
   ],
   "prefer_related_applications": false,
+  "launch_handler": {
+    "client_mode": "auto"
+  },
+  "handle_links": "preferred",
   "icons": [
     {
       "src": "/icon-48.png",
@@ -85,6 +89,22 @@
       "type": "image/svg+xml",
       "sizes": "any",
       "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-desktop.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "لوحة التحكم وتدقيق المستودع على الحاسوب والأجهزة اللوحية"
+    },
+    {
+      "src": "/screenshot-mobile.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "شاشة تدقيق ومسح الباركود على أجهزة الهاتف والـ PDA وماسحات الليزر"
     }
   ],
   "shortcuts": [
