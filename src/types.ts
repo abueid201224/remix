@@ -147,19 +147,26 @@ export interface AppSettings {
 }
 
 // -------------------------------------------------------------
-// Packaging Grouping & Barcode Filtering Rules (شروط ضم العبوات)
+// Packaging Grouping & Barcode Filtering Rules (شروط ومعادلات وقوائم العبوات والاسناد)
 // -------------------------------------------------------------
 export interface PackagingGroupRule {
   id: string;
-  name: string; // e.g. "مجموعة العصائر 250 مل"
-  startBarcode: string; // e.g. "6221000100"
-  endBarcode: string;   // e.g. "6221000199"
+  name: string; // e.g. "أطقم سكاكين ستيل"
+  startBarcode: string; // e.g. "114110001"
+  endBarcode: string;   // e.g. "115412004"
   category?: string;
-  cartonFactor: number; // e.g. 24 pieces per master carton / box
-  packFactor: number;   // e.g. 6 pieces per shrink/inner pack
-  unitName: string;     // e.g. "حبة" (الوحدة الصغرى)
-  systemUnit?: string;  // e.g. "حبة" | "باكيت" | "بوكس" | "كرتونة" | "دستة" | "طرد" (الوحدة المعرفة على السيستم للصرف)
-  baseUnit?: string;    // e.g. "حبة"
+  cartonFactor: number; // معامل الكرتونة بالحبات أو بالوحدة الصغرى (e.g. 72 or 12 or 20)
+  packFactor: number;   // معامل الباكت/البوكس بالحبات (e.g. 6 or 3 or 5 or 12)
+  unitName: string;     // الوحدة الصغرى (e.g. "HDZ" | "EA" | "PCS" | "حبة")
+  systemUnit?: string;  // الوحدة المعرفة بالفاتورة / السيستم (e.g. "DZ" | "HDZ" | "PCS" | "EA")
+  baseUnit?: string;    // الوحدة الصغرى / وحدة الصرف (e.g. "HDZ" | "DZ" | "PCS" | "EA")
+  cartonSizeSystemUnit?: string; // حجم الكرتونة بالوحدة المعرفة (e.g. "6 DZ", "1 DZ", "20 PCS", "24 EA")
+  cartonSizeBaseUnit?: string;   // حجم الكرتونة بالوحدة الصغرى (e.g. "12 HDZ", "12 EA", "20 PCS", "24 EA")
+  packSizeDesc?: string;         // حجم الباكت / الشد / البوكس (e.g. "6 PCS", "6 EA", "5 PCS", "3 PCS")
+  boxesPerCarton?: number;       // عدد البوكسات / الباكتات في الكرتونة (e.g. 12, 4, 3, 2, 8)
+  conversionEquation?: string;   // معادلة التحويل بين الوحدات (e.g. "HDZ=.5DZ", "EA=1/12DZ", "EA=EA", "PCS=PCS")
+  cartonEquation?: string;       // معادلة الكرتونة والبوكس (e.g. "1CARTON=12BOX(HDZ)=6DZ", "1CARTON=4BOX=20PCS")
+  difficultyLevel?: GroupDifficultyLevel; // 'HIGH_EXPERT' | 'MEDIUM_INTERMEDIATE' | 'LOW_NOVICE'
   isActive: boolean;
   notes?: string;
   createdAt: string;
@@ -373,7 +380,8 @@ export interface AggregatedPickingItem {
   itemCode: string;
   itemName: string;
   unit: string;
-  systemUnit?: string; // الوحدة المعرفة على السيستم للصرف (حبة / باكيت / بوكس / كرتونة)
+  systemUnit?: string; // الوحدة المعرفة على السيستم للصرف (DZ, HDZ, PCS, EA...)
+  baseUnit?: string;   // الوحدة الصغرى / وحدة الصرف (HDZ, DZ, PCS, EA...)
   groupId: string;
   groupName: string;
   totalRequiredQty: number; // إجمالي كمية الصنف المطلوبة من كافة فواتير اليوم مجتمعة
@@ -383,6 +391,11 @@ export interface AggregatedPickingItem {
   cartonsCount: number;
   packsCount: number;
   piecesCount: number;
+  boxesPerCarton?: number;
+  cartonEquation?: string;     // e.g. "1CARTON=12BOX(HDZ)=6DZ"
+  conversionEquation?: string; // e.g. "HDZ=.5DZ"
+  packSizeDesc?: string;       // e.g. "6 PCS"
+  cartonSizeDesc?: string;     // e.g. "6 DZ"
   invoiceSources: InvoiceItemSource[]; // تفصيل الفواتير والكمية المطلوبة لكل فاتورة منفردة
   status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
   location?: string;
@@ -396,6 +409,10 @@ export interface PickingProductGroup {
   assignedWorkerId?: string;
   assignedWorkerName?: string;
   assignedWorkerLevel?: WorkerExperienceLevel;
+  cartonEquation?: string;
+  conversionEquation?: string;
+  systemUnit?: string;
+  baseUnit?: string;
   items: AggregatedPickingItem[];
   totalQty: number;
   totalCartons: number;

@@ -1767,60 +1767,106 @@ export function exportPickingWaveToExcel(wave: BatchPickingWave, filterGroupId?:
 // ===================================================================
 
 /**
- * Downloads a detailed Excel template for Packaging Rules (شروط ضم العبوات والأصناف المتشابهة)
+ * Downloads a detailed Excel template for Packaging Rules (شروط ومعادلات وقوائم العبوات والاسناد)
  */
 export function downloadPackagingRulesExcelTemplate(): void {
   const sampleRules = [
     {
-      'اسم_المجموعة': 'مجموعة المشروبات والعصائر 250 مل',
-      'من_بداية_كود_باركود': '6221000100',
-      'الى_نهاية_كود_باركود': '6221000999',
-      'الوحدة_المعرفة_على_السيستم': 'حبة',
-      'معامل_الكرتونة_البوكس': 24,
-      'معامل_الباكت_الشد': 6,
-      'اسم_الوحدة_الفردية': 'حبة',
-      'التصنيف': 'مشروبات',
-      'ملاحظات': 'تضم كافة عصائر الزجاج والعبوات الصغيرة'
+      'اسم_المجموعة': 'أطقم سكاكين ستيل',
+      'من_بداية_كود_باركود': '114110001',
+      'الى_نهاية_كود_باركود': '115412004',
+      'الوحدة_المعرفة_على_السيستم': 'DZ',
+      'الوحدة_الأساسية': 'HDZ',
+      'حجم_الكرتونة_بوحدة_السيستم': '6 DZ',
+      'حجم_الكرتونة_بالوحدة_الأساسية': '12 HDZ',
+      'حجم_الباكت_البوكس': '6 PCS',
+      'عدد_البوكسات_في_الكرتونة': 12,
+      'معادلة_التحويل': 'HDZ=.5DZ',
+      'معادلة_الكرتونة_الكاملة': '1CARTON=12BOX(HDZ)=6DZ',
+      'معامل_الكرتونة': 12,
+      'معامل_الباكت': 1,
+      'مستوى_صعوبة_التجهيز': 'عالي (خبير)',
+      'التصنيف': 'أدوات مطبخ وسكاكين',
+      'ملاحظات': 'من باركود 114110001 إلى باركود 115412004'
     },
     {
-      'اسم_المجموعة': 'مجموعة المنظفات والمعقمات العائلية 1 لتر',
-      'من_بداية_كود_باركود': '6222000100',
-      'الى_نهاية_كود_باركود': '6222000999',
-      'الوحدة_المعرفة_على_السيستم': 'باكيت',
-      'معامل_الكرتونة_البوكس': 12,
-      'معامل_الباكت_الشد': 4,
-      'اسم_الوحدة_الفردية': 'عبوة',
-      'التصنيف': 'منظفات',
-      'ملاحظات': 'الصرف بوحدة الباكيت'
+      'اسم_المجموعة': 'أطقم شوك وملاعق فردية بوكس بالدستة',
+      'من_بداية_كود_باركود': '116100551',
+      'الى_نهاية_كود_باركود': '116190191',
+      'الوحدة_المعرفة_على_السيستم': 'DZ',
+      'الوحدة_الأساسية': 'DZ',
+      'حجم_الكرتونة_بوحدة_السيستم': '1 DZ',
+      'حجم_الكرتونة_بالوحدة_الأساسية': '12 EA',
+      'حجم_الباكت_البوكس': '6 EA',
+      'عدد_البوكسات_في_الكرتونة': 2,
+      'معادلة_التحويل': 'EA=1/12DZ',
+      'معادلة_الكرتونة_الكاملة': '1CARTON=2BOX=12EA',
+      'معامل_الكرتونة': 1,
+      'معامل_الباكت': 0.5,
+      'مستوى_صعوبة_التجهيز': 'متوسط',
+      'التصنيف': 'شوك وملاعق فردية',
+      'ملاحظات': 'من باركود 116100551 إلى باركود 116190191'
     },
     {
-      'اسم_المجموعة': 'مجموعة المعلبات والأغذية الجافة',
-      'من_بداية_كود_باركود': '8901234500',
-      'الى_نهاية_كود_باركود': '8901234599',
-      'الوحدة_المعرفة_على_السيستم': 'بوكس',
-      'معامل_الكرتونة_البوكس': 48,
-      'معامل_الباكت_الشد': 12,
-      'اسم_الوحدة_الفردية': 'علبة',
-      'التصنيف': 'أغذية',
-      'ملاحظات': 'علب التونة والبقوليات القياسية - الصرف بالبوكس'
+      'اسم_المجموعة': 'أكواب ورق / بلاستيك',
+      'من_بداية_كود_باركود': '511107155',
+      'الى_نهاية_كود_باركود': '740103760',
+      'الوحدة_المعرفة_على_السيستم': 'PCS',
+      'الوحدة_الأساسية': 'PCS',
+      'حجم_الكرتونة_بوحدة_السيستم': '20 PCS',
+      'حجم_الكرتونة_بالوحدة_الأساسية': '20 PCS',
+      'حجم_الباكت_البوكس': '5 PCS',
+      'عدد_البوكسات_في_الكرتونة': 4,
+      'معادلة_التحويل': 'PCS=PCS',
+      'معادلة_الكرتونة_الكاملة': '1CARTON=4BOX=20PCS',
+      'معامل_الكرتونة': 20,
+      'معامل_الباكت': 5,
+      'مستوى_صعوبة_التجهيز': 'سهل (مبتدئ)',
+      'التصنيف': 'مستهلكات وأكواب',
+      'ملاحظات': 'من باركود 511107155 إلى باركود 740103760'
+    },
+    {
+      'اسم_المجموعة': 'أطقم ملاعق وسكاكين فاخرة بالدستة',
+      'من_بداية_كود_باركود': '910378516',
+      'الى_نهاية_كود_باركود': '910378632',
+      'الوحدة_المعرفة_على_السيستم': 'DZ',
+      'الوحدة_الأساسية': 'DZ',
+      'حجم_الكرتونة_بوحدة_السيستم': '2 DZ',
+      'حجم_الكرتونة_بالوحدة_الأساسية': '24 EA',
+      'حجم_الباكت_البوكس': '6 EA',
+      'عدد_البوكسات_في_الكرتونة': 4,
+      'معادلة_التحويل': 'EA=EA',
+      'معادلة_الكرتونة_الكاملة': '1CARTON=4BOX=24EA',
+      'معامل_الكرتونة': 2,
+      'معامل_الباكت': 0.5,
+      'مستوى_صعوبة_التجهيز': 'متوسط',
+      'التصنيف': 'أطقم فاخرة',
+      'ملاحظات': 'من باركود 910378516 إلى باركود 910378632'
     }
   ];
 
   const worksheet = XLSX.utils.json_to_sheet(sampleRules);
   worksheet['!cols'] = [
     { wch: 32 }, // اسم المجموعة
-    { wch: 22 }, // من كود
-    { wch: 22 }, // إلى كود
-    { wch: 24 }, // الوحدة المعرفة
-    { wch: 20 }, // معامل الكرتونة
-    { wch: 18 }, // معامل الباكت
-    { wch: 18 }, // الوحدة الفردية
-    { wch: 18 }, // التصنيف
-    { wch: 40 }, // ملاحظات
+    { wch: 20 }, // من بداية كود
+    { wch: 20 }, // إلى نهاية كود
+    { wch: 22 }, // الوحدة المعرفة
+    { wch: 18 }, // الوحدة الأساسية
+    { wch: 24 }, // حجم الكرتونة بوحدة السيستم
+    { wch: 24 }, // حجم الكرتونة بالوحدة الأساسية
+    { wch: 18 }, // حجم الباكت
+    { wch: 22 }, // عدد البوكسات
+    { wch: 20 }, // معادلة التحويل
+    { wch: 28 }, // معادلة الكرتونة الكاملة
+    { wch: 16 }, // معامل الكرتونة
+    { wch: 16 }, // معامل الباكت
+    { wch: 20 }, // مستوى الصعوبة
+    { wch: 20 }, // التصنيف
+    { wch: 35 }, // ملاحظات
   ];
 
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'شروط_تجميع_العبوات');
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'شروط_ومعادلات_العبوات');
   XLSX.writeFile(workbook, `Packaging_Rules_Template_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
@@ -1864,9 +1910,25 @@ export async function parsePackagingRulesExcel(file: File): Promise<{ rules: Pac
           const startBarcode = normalized['من_بداية_كود_باركود'] || normalized['منبدايةكودباركود'] || normalized['بداية_الكود'] || normalized['بدايةالكود'] || normalized['startbarcode'] || normalized['startcode'] || normalized['fromcode'] || '';
           const endBarcode = normalized['الى_نهاية_كود_باركود'] || normalized['الى_نهاية_كود'] || normalized['نهاية_الكود'] || normalized['نهايةالكود'] || normalized['endbarcode'] || normalized['endcode'] || normalized['tocode'] || startBarcode;
           const systemUnit = normalized['الوحدة_المعرفة_على_السيستم'] || normalized['الوحدة_المعرفة'] || normalized['الوحدةالمعرفةعلىالسيستم'] || normalized['وحدة_الصرف'] || normalized['systemunit'] || normalized['issueunit'] || 'حبة';
-          const cartonFactor = parseInt(normalized['معامل_الكرتونة_البوكس'] || normalized['معاملالكرتونةالبوكس'] || normalized['معامل_الكرتون'] || normalized['الكرتون'] || normalized['cartonfactor'] || normalized['boxfactor'] || '24', 10) || 24;
-          const packFactor = parseInt(normalized['معامل_الباكت_الشد'] || normalized['معاملالباكتالشد'] || normalized['معامل_الباكت'] || normalized['الباكت'] || normalized['packfactor'] || normalized['shrinkfactor'] || '6', 10) || 6;
-          const unitName = normalized['اسم_الوحدة_الفردية'] || normalized['الوحدة_الفردية'] || normalized['اسم_الوحدة'] || normalized['الوحدة'] || normalized['unitname'] || normalized['unit'] || 'حبة';
+          const baseUnit = normalized['الوحدة_الأساسية'] || normalized['الوحدةالأساسية'] || normalized['baseunit'] || systemUnit;
+          const cartonSizeSystemUnit = normalized['حجم_الكرتونة_بوحدة_السيستم'] || normalized['حجمالكرتونةبوحدةالسيستم'] || normalized['cartonsizesystemunit'] || '';
+          const cartonSizeBaseUnit = normalized['حجم_الكرتونة_بالوحدة_الأساسية'] || normalized['حجمالكرتونةبالوحدةالأساسية'] || normalized['cartonsizebaseunit'] || '';
+          const packSizeDesc = normalized['حجم_الباكت_البوكس'] || normalized['حجمالباكتالبوكس'] || normalized['packsizedesc'] || '';
+          const boxesPerCarton = parseInt(normalized['عدد_البوكسات_في_الكرتونة'] || normalized['عددالبوكساتفيالكرتونة'] || normalized['boxespercarton'] || '4', 10) || 4;
+          const conversionEquation = normalized['معادلة_التحويل'] || normalized['معادلةالتحويل'] || normalized['conversionequation'] || `${baseUnit}=${systemUnit}`;
+          const cartonEquation = normalized['معادلة_الكرتونة_الكاملة'] || normalized['معادلةالكرتونةالكاملة'] || normalized['cartonequation'] || '';
+          const cartonFactor = parseFloat(normalized['معامل_الكرتونة'] || normalized['معاملالكرتونة'] || normalized['معامل_الكرتونة_البوكس'] || normalized['cartonfactor'] || '24') || 24;
+          const packFactor = parseFloat(normalized['معامل_الباكت'] || normalized['معاملالباكت'] || normalized['معامل_الباكت_الشد'] || normalized['packfactor'] || '6') || 6;
+          const unitName = normalized['اسم_الوحدة_الفردية'] || normalized['الوحدة_الفردية'] || normalized['اسم_الوحدة'] || normalized['الوحدة'] || normalized['unitname'] || normalized['unit'] || baseUnit;
+          
+          const rawDifficulty = normalized['مستوى_صعوبة_التجهيز'] || normalized['مستوىالصعوبة'] || normalized['صعوبة'] || normalized['difficultylevel'] || '';
+          let difficultyLevel: 'HIGH_EXPERT' | 'MEDIUM_INTERMEDIATE' | 'LOW_NOVICE' = 'MEDIUM_INTERMEDIATE';
+          if (rawDifficulty.includes('خبير') || rawDifficulty.includes('عالي') || rawDifficulty.toLowerCase().includes('high') || rawDifficulty.toLowerCase().includes('expert')) {
+            difficultyLevel = 'HIGH_EXPERT';
+          } else if (rawDifficulty.includes('مبتدئ') || rawDifficulty.includes('سهل') || rawDifficulty.toLowerCase().includes('low') || rawDifficulty.toLowerCase().includes('novice')) {
+            difficultyLevel = 'LOW_NOVICE';
+          }
+
           const category = normalized['التصنيف'] || normalized['المجموعة'] || normalized['category'] || 'عام';
           const notes = normalized['ملاحظات'] || normalized['notes'] || '';
 
@@ -1880,12 +1942,19 @@ export async function parsePackagingRulesExcel(file: File): Promise<{ rules: Pac
             name,
             startBarcode,
             endBarcode,
-            category,
+            systemUnit,
+            baseUnit,
+            unitName,
+            cartonSizeSystemUnit,
+            cartonSizeBaseUnit,
+            packSizeDesc,
+            boxesPerCarton,
+            conversionEquation,
+            cartonEquation,
             cartonFactor,
             packFactor,
-            unitName,
-            systemUnit,
-            baseUnit: unitName,
+            difficultyLevel,
+            category,
             isActive: true,
             notes,
             createdAt: new Date().toISOString(),
@@ -1918,8 +1987,16 @@ export function exportPackagingRulesToExcel(rules: PackagingGroupRule[]): void {
     'من_بداية_كود_باركود': r.startBarcode,
     'الى_نهاية_كود_باركود': r.endBarcode,
     'الوحدة_المعرفة_على_السيستم': r.systemUnit || r.unitName || 'حبة',
-    'معامل_الكرتونة_البوكس': r.cartonFactor,
-    'معامل_الباكت_الشد': r.packFactor,
+    'الوحدة_الأساسية': r.baseUnit || r.unitName || 'حبة',
+    'حجم_الكرتونة_بوحدة_السيستم': r.cartonSizeSystemUnit || '',
+    'حجم_الكرتونة_بالوحدة_الأساسية': r.cartonSizeBaseUnit || '',
+    'حجم_الباكت_البوكس': r.packSizeDesc || '',
+    'عدد_البوكسات_في_الكرتونة': r.boxesPerCarton || 0,
+    'معادلة_التحويل': r.conversionEquation || '',
+    'معادلة_الكرتونة_الكاملة': r.cartonEquation || '',
+    'معامل_الكرتونة': r.cartonFactor,
+    'معامل_الباكت': r.packFactor,
+    'مستوى_صعوبة_التجهيز': r.difficultyLevel === 'HIGH_EXPERT' ? 'عالي (خبير)' : r.difficultyLevel === 'LOW_NOVICE' ? 'سهل (مبتدئ)' : 'متوسط',
     'اسم_الوحدة_الفردية': r.unitName,
     'التصنيف': r.category || '-',
     'الحالة': r.isActive ? 'مفعل نشط' : 'معطل',
@@ -1930,11 +2007,19 @@ export function exportPackagingRulesToExcel(rules: PackagingGroupRule[]): void {
   worksheet['!cols'] = [
     { wch: 6 },
     { wch: 32 },
-    { wch: 22 },
-    { wch: 22 },
-    { wch: 24 },
     { wch: 20 },
+    { wch: 20 },
+    { wch: 24 },
     { wch: 18 },
+    { wch: 24 },
+    { wch: 24 },
+    { wch: 18 },
+    { wch: 22 },
+    { wch: 20 },
+    { wch: 28 },
+    { wch: 16 },
+    { wch: 16 },
+    { wch: 20 },
     { wch: 18 },
     { wch: 18 },
     { wch: 14 },
@@ -1942,7 +2027,7 @@ export function exportPackagingRulesToExcel(rules: PackagingGroupRule[]): void {
   ];
 
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'شروط_تجميع_العبوات');
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'شروط_ومعادلات_العبوات');
   XLSX.writeFile(workbook, `Packaging_Rules_Export_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 

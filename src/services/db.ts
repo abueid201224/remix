@@ -561,52 +561,315 @@ export async function saveAppSettings(settings: AppSettings): Promise<void> {
 }
 
 // -------------------------------------------------------------------
-// Packaging Grouping Rules (قائمة شروط ضم المنتجات في مجموعات متشابهة)
+// Packaging Grouping Rules (قائمة شروط ومعادلات وقوائم العبوات والاسناد)
 // -------------------------------------------------------------------
 export const DEFAULT_PACKAGING_RULES: PackagingGroupRule[] = [
   {
-    id: 'grp-rule-1',
-    name: 'مجموعة المشروبات والعصائر (كرتون 24 / باكت 6)',
-    startBarcode: '6221000100',
-    endBarcode: '6221000999',
-    category: 'مشروبات',
-    cartonFactor: 24,
-    packFactor: 6,
-    unitName: 'حبة',
-    systemUnit: 'حبة',
-    baseUnit: 'حبة',
+    id: 'grp-knife-steel-1',
+    name: 'أطقم سكاكين ستيل',
+    startBarcode: '114110001',
+    endBarcode: '115412004',
+    systemUnit: 'DZ',
+    baseUnit: 'HDZ',
+    unitName: 'HDZ',
+    cartonSizeSystemUnit: '6 DZ',
+    cartonSizeBaseUnit: '12 HDZ',
+    packSizeDesc: '6 PCS',
+    boxesPerCarton: 12,
+    conversionEquation: 'HDZ=.5DZ',
+    cartonEquation: '1CARTON=12BOX(HDZ)=6DZ',
+    cartonFactor: 12,
+    packFactor: 1,
+    difficultyLevel: 'HIGH_EXPERT',
+    category: 'أدوات مطبخ وسكاكين',
     isActive: true,
-    notes: 'تضم كافة أحجام العصائر الصغيرة 250 مل',
+    notes: 'من باركود 114110001 إلى باركود 115412004',
     createdAt: new Date().toISOString(),
   },
   {
-    id: 'grp-rule-2',
-    name: 'مجموعة المنظفات والمعقمات (كرتون 12 / باكت 4)',
-    startBarcode: '6222000100',
-    endBarcode: '6222000999',
-    category: 'منظفات',
+    id: 'grp-knife-steel-v-2',
+    name: 'أطقم سكاكين ستيل V',
+    startBarcode: '184000571',
+    endBarcode: '184100017',
+    systemUnit: 'DZ',
+    baseUnit: 'HDZ',
+    unitName: 'HDZ',
+    cartonSizeSystemUnit: '6 DZ',
+    cartonSizeBaseUnit: '12 HDZ',
+    packSizeDesc: '6 PCS',
+    boxesPerCarton: 12,
+    conversionEquation: 'HDZ=.5DZ',
+    cartonEquation: '1CARTON=12BOX(HDZ)=6DZ',
+    cartonFactor: 12,
+    packFactor: 1,
+    difficultyLevel: 'HIGH_EXPERT',
+    category: 'أدوات مطبخ وسكاكين',
+    isActive: true,
+    notes: 'من باركود 184000571 إلى باركود 184100017',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'grp-cutlery-forks-spoons-3',
+    name: 'أطقم شوك وملاعق',
+    startBarcode: '130110001',
+    endBarcode: '138412003',
+    systemUnit: 'DZ',
+    baseUnit: 'HDZ',
+    unitName: 'HDZ',
+    cartonSizeSystemUnit: '6 DZ',
+    cartonSizeBaseUnit: '12 HDZ',
+    packSizeDesc: '6 PCS',
+    boxesPerCarton: 12,
+    conversionEquation: 'HDZ=.5DZ',
+    cartonEquation: '1CARTON=12BOX(HDZ)=6DZ',
+    cartonFactor: 12,
+    packFactor: 1,
+    difficultyLevel: 'HIGH_EXPERT',
+    category: 'شوك وملاعق',
+    isActive: true,
+    notes: 'من باركود 130110001 إلى باركود 138412003',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'grp-cutlery-box-dz-4',
+    name: 'أطقم شوك وملاعق فردية بوكس بالدستة',
+    startBarcode: '116100551',
+    endBarcode: '116190191',
+    systemUnit: 'DZ',
+    baseUnit: 'DZ',
+    unitName: 'DZ',
+    cartonSizeSystemUnit: '1 DZ',
+    cartonSizeBaseUnit: '12 EA',
+    packSizeDesc: '6 EA',
+    boxesPerCarton: 2,
+    conversionEquation: 'EA=1/12DZ',
+    cartonEquation: '1CARTON=2BOX=12EA',
+    cartonFactor: 1,
+    packFactor: 0.5,
+    difficultyLevel: 'MEDIUM_INTERMEDIATE',
+    category: 'شوك وملاعق فردية',
+    isActive: true,
+    notes: 'من باركود 116100551 إلى باركود 116190191',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'grp-cutlery-box-ea-5',
+    name: 'أطقم شوك وملاعق فردية بوكس بالحبة',
+    startBarcode: '116100551',
+    endBarcode: '116190191',
+    systemUnit: 'EA',
+    baseUnit: 'EA',
+    unitName: 'EA',
+    cartonSizeSystemUnit: '12 EA',
+    cartonSizeBaseUnit: '12 EA',
+    packSizeDesc: '6 EA',
+    boxesPerCarton: 2,
+    conversionEquation: 'EA=EA',
+    cartonEquation: '1CARTON=2BOX=12EA',
+    cartonFactor: 12,
+    packFactor: 6,
+    difficultyLevel: 'MEDIUM_INTERMEDIATE',
+    category: 'شوك وملاعق فردية',
+    isActive: true,
+    notes: 'من باركود 116100551 إلى باركود 116190191',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'grp-cups-paper-plastic-6',
+    name: 'أكواب ورق / بلاستيك',
+    startBarcode: '511107155',
+    endBarcode: '740103760',
+    systemUnit: 'PCS',
+    baseUnit: 'PCS',
+    unitName: 'PCS',
+    cartonSizeSystemUnit: '20 PCS',
+    cartonSizeBaseUnit: '20 PCS',
+    packSizeDesc: '5 PCS',
+    boxesPerCarton: 4,
+    conversionEquation: 'PCS=PCS',
+    cartonEquation: '1CARTON=4BOX=20PCS',
+    cartonFactor: 20,
+    packFactor: 5,
+    difficultyLevel: 'LOW_NOVICE',
+    category: 'مستهلكات وأكواب',
+    isActive: true,
+    notes: 'من باركود 511107155 إلى باركود 740103760',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'grp-food-storage-boxes-7',
+    name: 'علب حفظ وتخزين طعام بلاستيك',
+    startBarcode: '361100706',
+    endBarcode: '371230207',
+    systemUnit: 'PCS',
+    baseUnit: 'PCS',
+    unitName: 'PCS',
+    cartonSizeSystemUnit: '12 PCS',
+    cartonSizeBaseUnit: '12 PCS',
+    packSizeDesc: '3 PCS',
+    boxesPerCarton: 4,
+    conversionEquation: 'PCS=PCS',
+    cartonEquation: '1CARTON=4BOX=12PCS',
+    cartonFactor: 12,
+    packFactor: 3,
+    difficultyLevel: 'LOW_NOVICE',
+    category: 'علب وتخزين',
+    isActive: true,
+    notes: 'من باركود 361100789 إلى باركود 371230207',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'grp-serving-pots-8',
+    name: 'أواني تقديم',
+    startBarcode: '910371598',
+    endBarcode: '910371695',
+    systemUnit: 'EA',
+    baseUnit: 'EA',
+    unitName: 'EA',
+    cartonSizeSystemUnit: '24 EA',
+    cartonSizeBaseUnit: '24 EA',
+    packSizeDesc: '12 PCS',
+    boxesPerCarton: 2,
+    conversionEquation: 'EA=EA',
+    cartonEquation: '1CARTON=2BOX=24EA',
+    cartonFactor: 24,
+    packFactor: 12,
+    difficultyLevel: 'LOW_NOVICE',
+    category: 'أواني تقديم',
+    isActive: true,
+    notes: 'من باركود 910371598 إلى باركود 910371695',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'grp-serving-boxes-trays-9',
+    name: 'علب وصواني تقديم',
+    startBarcode: '910375602',
+    endBarcode: '910376554',
+    systemUnit: 'PCS',
+    baseUnit: 'PCS',
+    unitName: 'PCS',
+    cartonSizeSystemUnit: '12 PCS',
+    cartonSizeBaseUnit: '12 PCS',
+    packSizeDesc: '6 PCS',
+    boxesPerCarton: 2,
+    conversionEquation: 'PCS=PCS',
+    cartonEquation: '1CARTON=2BOX=12PCS',
+    cartonFactor: 12,
+    packFactor: 6,
+    difficultyLevel: 'LOW_NOVICE',
+    category: 'صواني وعلب تقديم',
+    isActive: true,
+    notes: 'من باركود 910375602 إلى باركود 910376554',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'grp-plates-melamine-10',
+    name: 'أطباق تقديم بلاستيك / ميلامين',
+    startBarcode: '910376690',
+    endBarcode: '910378505',
+    systemUnit: 'PCS',
+    baseUnit: 'PCS',
+    unitName: 'PCS',
+    cartonSizeSystemUnit: '12 PCS',
+    cartonSizeBaseUnit: '12 PCS',
+    packSizeDesc: '4 PCS',
+    boxesPerCarton: 3,
+    conversionEquation: 'PCS=PCS',
+    cartonEquation: '1CARTON=3BOX=12PCS',
     cartonFactor: 12,
     packFactor: 4,
-    unitName: 'عبوة',
-    systemUnit: 'باكيت',
-    baseUnit: 'عبوة',
+    difficultyLevel: 'LOW_NOVICE',
+    category: 'أطباق تقديم',
     isActive: true,
-    notes: 'العبوات العائلية 1 لتر - الصرف بوحدة الباكيت',
+    notes: 'من باركود 910376690 إلى باركود 910378505',
     createdAt: new Date().toISOString(),
   },
   {
-    id: 'grp-rule-3',
-    name: 'مجموعة المعلبات والأغذية الجافة (كرتون 48 / باكت 12)',
-    startBarcode: '8901234500',
-    endBarcode: '8901234599',
-    category: 'أغذية',
-    cartonFactor: 48,
-    packFactor: 12,
-    unitName: 'علبة',
-    systemUnit: 'بوكس',
-    baseUnit: 'علبة',
+    id: 'grp-luxury-cutlery-dz-11',
+    name: 'أطقم ملاعق وسكاكين فاخرة بالدستة',
+    startBarcode: '910378516',
+    endBarcode: '910378632',
+    systemUnit: 'DZ',
+    baseUnit: 'DZ',
+    unitName: 'DZ',
+    cartonSizeSystemUnit: '2 DZ',
+    cartonSizeBaseUnit: '24 EA',
+    packSizeDesc: '6 EA',
+    boxesPerCarton: 4,
+    conversionEquation: 'EA=EA',
+    cartonEquation: '1CARTON=4BOX=24EA',
+    cartonFactor: 2,
+    packFactor: 0.5,
+    difficultyLevel: 'MEDIUM_INTERMEDIATE',
+    category: 'أطقم فاخرة',
     isActive: true,
-    notes: 'علب التونة والبقوليات القياسية - الصرف بالبوكس',
+    notes: 'من باركود 910378516 إلى باركود 910378632',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'grp-luxury-cutlery-ea-12',
+    name: 'أطقم ملاعق وسكاكين فاخرة بالحبة',
+    startBarcode: '910378516',
+    endBarcode: '910378632',
+    systemUnit: 'EA',
+    baseUnit: 'EA',
+    unitName: 'EA',
+    cartonSizeSystemUnit: '24 EA',
+    cartonSizeBaseUnit: '24 EA',
+    packSizeDesc: '6 EA',
+    boxesPerCarton: 4,
+    conversionEquation: 'EA=EA',
+    cartonEquation: '1CARTON=4BOX=24EA',
+    cartonFactor: 24,
+    packFactor: 6,
+    difficultyLevel: 'MEDIUM_INTERMEDIATE',
+    category: 'أطقم فاخرة',
+    isActive: true,
+    notes: 'من باركود 910378516 إلى باركود 910378632',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'grp-large-cutlery-dz-13',
+    name: 'أطقم شوك وسكاكين مقاس كبير بالدستة',
+    startBarcode: '910378633',
+    endBarcode: '910378999',
+    systemUnit: 'DZ',
+    baseUnit: 'DZ',
+    unitName: 'DZ',
+    cartonSizeSystemUnit: '4 DZ',
+    cartonSizeBaseUnit: '48 EA',
+    packSizeDesc: '6 EA',
+    boxesPerCarton: 8,
+    conversionEquation: 'EA=EA',
+    cartonEquation: '1CARTON=8BOX=48EA',
+    cartonFactor: 4,
+    packFactor: 0.5,
+    difficultyLevel: 'MEDIUM_INTERMEDIATE',
+    category: 'شوك وسكاكين مقاس كبير',
+    isActive: true,
+    notes: 'من باركود 910378633 إلى باركود 910378999',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'grp-large-cutlery-ea-14',
+    name: 'أطقم شوك وسكاكين مقاس كبير بالحبة',
+    startBarcode: '910378633',
+    endBarcode: '910378999',
+    systemUnit: 'EA',
+    baseUnit: 'EA',
+    unitName: 'EA',
+    cartonSizeSystemUnit: '48 EA',
+    cartonSizeBaseUnit: '48 EA',
+    packSizeDesc: '6 EA',
+    boxesPerCarton: 8,
+    conversionEquation: 'EA=EA',
+    cartonEquation: '1CARTON=8BOX=48EA',
+    cartonFactor: 48,
+    packFactor: 6,
+    difficultyLevel: 'MEDIUM_INTERMEDIATE',
+    category: 'شوك وسكاكين مقاس كبير',
+    isActive: true,
+    notes: 'من باركود 910378633 إلى باركود 910378999',
     createdAt: new Date().toISOString(),
   }
 ];
@@ -614,12 +877,242 @@ export const DEFAULT_PACKAGING_RULES: PackagingGroupRule[] = [
 export async function getPackagingGroupRules(): Promise<PackagingGroupRule[]> {
   const db = await getDB();
   const rules = await db.get('key_value', 'packaging_group_rules');
-  return (rules as PackagingGroupRule[]) || DEFAULT_PACKAGING_RULES;
+  if (!rules || !Array.isArray(rules) || rules.length === 0) {
+    await db.put('key_value', DEFAULT_PACKAGING_RULES, 'packaging_group_rules');
+    return DEFAULT_PACKAGING_RULES;
+  }
+  return rules as PackagingGroupRule[];
 }
 
 export async function savePackagingGroupRules(rules: PackagingGroupRule[]): Promise<void> {
   const db = await getDB();
   await db.put('key_value', rules, 'packaging_group_rules');
+}
+
+export async function resetPackagingGroupRulesToDefault(): Promise<PackagingGroupRule[]> {
+  const db = await getDB();
+  await db.put('key_value', DEFAULT_PACKAGING_RULES, 'packaging_group_rules');
+  return DEFAULT_PACKAGING_RULES;
+}
+
+/**
+ * Calculates accurate packaging breakdown (Cartons, Packs/Boxes, Loose Pieces)
+ * based on item quantity, item unit, and packaging rule formulas.
+ */
+export function calculatePackagingBreakdown(
+  qty: number,
+  itemUnit: string,
+  rule?: PackagingGroupRule | null
+): {
+  cartonsCount: number;
+  packsCount: number;
+  piecesCount: number;
+  cartonFactor: number;
+  packFactor: number;
+  cartonEquation: string;
+  conversionEquation: string;
+  formattedBreakdown: string;
+} {
+  const unit = String(itemUnit || '').toUpperCase().trim();
+  
+  if (!rule) {
+    const cf = 24;
+    const pf = 6;
+    const cartons = Math.floor(qty / cf);
+    const rem = qty % cf;
+    const packs = Math.floor(rem / pf);
+    const pieces = rem % pf;
+    return {
+      cartonsCount: cartons,
+      packsCount: packs,
+      piecesCount: pieces,
+      cartonFactor: cf,
+      packFactor: pf,
+      cartonEquation: '1CARTON=4BOX=24PCS',
+      conversionEquation: 'PCS=PCS',
+      formattedBreakdown: `${cartons} كرتونة + ${packs} باكت + ${pieces} حبة`,
+    };
+  }
+
+  const cartonEq = rule.cartonEquation || '';
+  const convEq = rule.conversionEquation || '';
+
+  // 1. Formula: 1CARTON=12BOX(HDZ)=6DZ
+  if (cartonEq.includes('12BOX') && cartonEq.includes('6DZ')) {
+    if (unit === 'DZ' || unit === 'دستة') {
+      const cartons = Math.floor(qty / 6);
+      const remDZ = qty % 6;
+      const hdzTotal = remDZ * 2; // 1 DZ = 2 HDZ
+      const packs = Math.floor(hdzTotal);
+      const pieces = Math.round((hdzTotal - packs) * 6);
+      return {
+        cartonsCount: cartons,
+        packsCount: packs,
+        piecesCount: pieces,
+        cartonFactor: 6,
+        packFactor: 0.5,
+        cartonEquation: rule.cartonEquation || '1CARTON=12BOX(HDZ)=6DZ',
+        conversionEquation: rule.conversionEquation || 'HDZ=.5DZ',
+        formattedBreakdown: `${cartons} كرتونة + ${packs} بوكس(نصف دستة) + ${pieces} حبة`,
+      };
+    } else if (unit === 'HDZ' || unit === 'نصف دستة') {
+      const cartons = Math.floor(qty / 12);
+      const remHDZ = qty % 12;
+      const packs = Math.floor(remHDZ);
+      const pieces = 0;
+      return {
+        cartonsCount: cartons,
+        packsCount: packs,
+        piecesCount: pieces,
+        cartonFactor: 12,
+        packFactor: 1,
+        cartonEquation: rule.cartonEquation || '1CARTON=12BOX(HDZ)=6DZ',
+        conversionEquation: rule.conversionEquation || 'HDZ=.5DZ',
+        formattedBreakdown: `${cartons} كرتونة + ${packs} بوكس(نصف دستة)`,
+      };
+    } else {
+      // PCS / EA
+      const totalPieces = qty;
+      const cartons = Math.floor(totalPieces / 72);
+      const rem = totalPieces % 72;
+      const packs = Math.floor(rem / 6);
+      const pieces = rem % 6;
+      return {
+        cartonsCount: cartons,
+        packsCount: packs,
+        piecesCount: pieces,
+        cartonFactor: 72,
+        packFactor: 6,
+        cartonEquation: rule.cartonEquation || '1CARTON=12BOX(HDZ)=6DZ',
+        conversionEquation: rule.conversionEquation || 'HDZ=.5DZ',
+        formattedBreakdown: `${cartons} كرتونة + ${packs} بوكس + ${pieces} حبة`,
+      };
+    }
+  }
+
+  // 2. Formula: 1CARTON=2BOX=12EA
+  if (cartonEq.includes('2BOX') && cartonEq.includes('12EA')) {
+    if (unit === 'DZ' || unit === 'دستة') {
+      const cartons = Math.floor(qty);
+      const remDZ = qty % 1;
+      const packs = Math.floor(remDZ * 2);
+      const pieces = Math.round((remDZ * 2 - packs) * 6);
+      return {
+        cartonsCount: cartons,
+        packsCount: packs,
+        piecesCount: pieces,
+        cartonFactor: 1,
+        packFactor: 0.5,
+        cartonEquation: rule.cartonEquation || '1CARTON=2BOX=12EA',
+        conversionEquation: rule.conversionEquation || 'EA=1/12DZ',
+        formattedBreakdown: `${cartons} كرتونة + ${packs} بوكس + ${pieces} حبة`,
+      };
+    } else {
+      const cartons = Math.floor(qty / 12);
+      const rem = qty % 12;
+      const packs = Math.floor(rem / 6);
+      const pieces = rem % 6;
+      return {
+        cartonsCount: cartons,
+        packsCount: packs,
+        piecesCount: pieces,
+        cartonFactor: 12,
+        packFactor: 6,
+        cartonEquation: rule.cartonEquation || '1CARTON=2BOX=12EA',
+        conversionEquation: rule.conversionEquation || 'EA=EA',
+        formattedBreakdown: `${cartons} كرتونة + ${packs} بوكس + ${pieces} حبة`,
+      };
+    }
+  }
+
+  // 3. Formula: 1CARTON=4BOX=24EA
+  if (cartonEq.includes('4BOX') && cartonEq.includes('24EA')) {
+    if (unit === 'DZ' || unit === 'دستة') {
+      const cartons = Math.floor(qty / 2);
+      const remDZ = qty % 2;
+      const packs = Math.floor(remDZ * 2);
+      const pieces = Math.round((remDZ * 2 - packs) * 6);
+      return {
+        cartonsCount: cartons,
+        packsCount: packs,
+        piecesCount: pieces,
+        cartonFactor: 2,
+        packFactor: 0.5,
+        cartonEquation: rule.cartonEquation || '1CARTON=4BOX=24EA',
+        conversionEquation: rule.conversionEquation || 'EA=EA',
+        formattedBreakdown: `${cartons} كرتونة + ${packs} بوكس + ${pieces} حبة`,
+      };
+    } else {
+      const cartons = Math.floor(qty / 24);
+      const rem = qty % 24;
+      const packs = Math.floor(rem / 6);
+      const pieces = rem % 6;
+      return {
+        cartonsCount: cartons,
+        packsCount: packs,
+        piecesCount: pieces,
+        cartonFactor: 24,
+        packFactor: 6,
+        cartonEquation: rule.cartonEquation || '1CARTON=4BOX=24EA',
+        conversionEquation: rule.conversionEquation || 'EA=EA',
+        formattedBreakdown: `${cartons} كرتونة + ${packs} بوكس + ${pieces} حبة`,
+      };
+    }
+  }
+
+  // 4. Formula: 1CARTON=8BOX=48EA
+  if (cartonEq.includes('8BOX') && cartonEq.includes('48EA')) {
+    if (unit === 'DZ' || unit === 'دستة') {
+      const cartons = Math.floor(qty / 4);
+      const remDZ = qty % 4;
+      const packs = Math.floor(remDZ * 2);
+      const pieces = Math.round((remDZ * 2 - packs) * 6);
+      return {
+        cartonsCount: cartons,
+        packsCount: packs,
+        piecesCount: pieces,
+        cartonFactor: 4,
+        packFactor: 0.5,
+        cartonEquation: rule.cartonEquation || '1CARTON=8BOX=48EA',
+        conversionEquation: rule.conversionEquation || 'EA=EA',
+        formattedBreakdown: `${cartons} كرتونة + ${packs} بوكس + ${pieces} حبة`,
+      };
+    } else {
+      const cartons = Math.floor(qty / 48);
+      const rem = qty % 48;
+      const packs = Math.floor(rem / 6);
+      const pieces = rem % 6;
+      return {
+        cartonsCount: cartons,
+        packsCount: packs,
+        piecesCount: pieces,
+        cartonFactor: 48,
+        packFactor: 6,
+        cartonEquation: rule.cartonEquation || '1CARTON=8BOX=48EA',
+        conversionEquation: rule.conversionEquation || 'EA=EA',
+        formattedBreakdown: `${cartons} كرتونة + ${packs} بوكس + ${pieces} حبة`,
+      };
+    }
+  }
+
+  // Standard / Direct Factor Calculation
+  const cf = rule.cartonFactor || 24;
+  const pf = rule.packFactor || 6;
+  const cartons = Math.floor(qty / cf);
+  const rem = qty % cf;
+  const packs = pf > 0 ? Math.floor(rem / pf) : 0;
+  const pieces = pf > 0 ? rem % pf : rem;
+
+  return {
+    cartonsCount: cartons,
+    packsCount: packs,
+    piecesCount: pieces,
+    cartonFactor: cf,
+    packFactor: pf,
+    cartonEquation: rule.cartonEquation || `1CARTON=${rule.boxesPerCarton || 4}BOX=${cf}${rule.unitName || 'PCS'}`,
+    conversionEquation: rule.conversionEquation || `${rule.unitName || 'PCS'}=${rule.unitName || 'PCS'}`,
+    formattedBreakdown: `${cartons} كرتونة + ${packs} بوكس + ${pieces} ${rule.unitName || 'حبة'}`,
+  };
 }
 
 /**
@@ -671,7 +1164,11 @@ export function createPickingWaveFromMasterItems(
   const groupMap = new Map<string, {
     groupId: string;
     groupName: string;
-    difficulty: 'HIGH_EXPERT' | 'MEDIUM_INTERMEDIATE' | 'LOW_NOVICE';
+    difficulty: GroupDifficultyLevel;
+    cartonEquation?: string;
+    conversionEquation?: string;
+    systemUnit?: string;
+    baseUnit?: string;
     items: AggregatedPickingItem[];
   }>();
 
@@ -682,31 +1179,18 @@ export function createPickingWaveFromMasterItems(
 
   for (const itemData of itemMap.values()) {
     const matchedRule = matchBarcodeToPackagingRule(itemData.itemCode, rules);
-    const cartonFactor = matchedRule?.cartonFactor || 24;
-    const packFactor = matchedRule?.packFactor || 6;
+    const breakdown = calculatePackagingBreakdown(itemData.totalRequiredQty, itemData.unit, matchedRule);
+
     const systemUnit = matchedRule?.systemUnit || itemData.unit || 'حبة';
+    const baseUnit = matchedRule?.baseUnit || matchedRule?.unitName || itemData.unit || 'حبة';
+    const gId = matchedRule ? matchedRule.id : 'general';
+    const gName = matchedRule ? matchedRule.name : 'مجموعة عامة (تجهيز قياسي)';
+    const difficulty: GroupDifficultyLevel = matchedRule?.difficultyLevel || 'MEDIUM_INTERMEDIATE';
 
-    let gId = matchedRule ? matchedRule.id : 'general';
-    let gName = matchedRule ? matchedRule.name : 'مجموعة عامة (تجهيز قياسي)';
-    let difficulty: 'HIGH_EXPERT' | 'MEDIUM_INTERMEDIATE' | 'LOW_NOVICE' = 'MEDIUM_INTERMEDIATE';
-
-    const lower = (gName + ' ' + itemData.itemName).toLowerCase();
-    if (lower.includes('زجاج') || lower.includes('دواء') || lower.includes('حساس') || lower.includes('عطر') || lower.includes('كسر')) {
-      difficulty = 'HIGH_EXPERT';
-    } else if (lower.includes('كرتون') || lower.includes('سريع') || lower.includes('مناديل') || lower.includes('بلاستيك')) {
-      difficulty = 'LOW_NOVICE';
-    }
-
-    const totalQty = itemData.totalRequiredQty;
-    const cartonsCount = Math.floor(totalQty / cartonFactor);
-    const rem = totalQty % cartonFactor;
-    const packsCount = Math.floor(rem / packFactor);
-    const piecesCount = rem % packFactor;
-
-    waveTotalQty += totalQty;
-    waveTotalCartons += cartonsCount;
-    waveTotalPacks += packsCount;
-    waveTotalPieces += piecesCount;
+    waveTotalQty += itemData.totalRequiredQty;
+    waveTotalCartons += breakdown.cartonsCount;
+    waveTotalPacks += breakdown.packsCount;
+    waveTotalPieces += breakdown.piecesCount;
 
     const aggregatedItem: AggregatedPickingItem = {
       id: `pick-item-${itemData.itemCode}-${Date.now()}`,
@@ -714,18 +1198,25 @@ export function createPickingWaveFromMasterItems(
       itemName: itemData.itemName,
       unit: itemData.unit,
       systemUnit,
+      baseUnit,
       groupId: gId,
       groupName: gName,
-      totalRequiredQty: totalQty,
+      totalRequiredQty: itemData.totalRequiredQty,
       pickedQty: 0,
-      cartonFactor,
-      packFactor,
-      cartonsCount,
-      packsCount,
-      piecesCount,
+      cartonFactor: breakdown.cartonFactor,
+      packFactor: breakdown.packFactor,
+      cartonsCount: breakdown.cartonsCount,
+      packsCount: breakdown.packsCount,
+      piecesCount: breakdown.piecesCount,
+      boxesPerCarton: matchedRule?.boxesPerCarton,
+      cartonEquation: breakdown.cartonEquation,
+      conversionEquation: breakdown.conversionEquation,
+      packSizeDesc: matchedRule?.packSizeDesc,
+      cartonSizeDesc: matchedRule?.cartonSizeSystemUnit,
       invoiceSources: itemData.sources,
       status: 'PENDING',
       location: 'ممر التخزين الرئيسي',
+      notes: matchedRule?.notes || '',
     };
 
     if (!groupMap.has(gId)) {
@@ -733,6 +1224,10 @@ export function createPickingWaveFromMasterItems(
         groupId: gId,
         groupName: gName,
         difficulty,
+        cartonEquation: breakdown.cartonEquation,
+        conversionEquation: breakdown.conversionEquation,
+        systemUnit,
+        baseUnit,
         items: [aggregatedItem]
       });
     } else {
@@ -756,6 +1251,10 @@ export function createPickingWaveFromMasterItems(
       groupId: g.groupId,
       groupName: g.groupName,
       difficulty: g.difficulty,
+      cartonEquation: g.cartonEquation,
+      conversionEquation: g.conversionEquation,
+      systemUnit: g.systemUnit,
+      baseUnit: g.baseUnit,
       items: g.items,
       totalQty: groupQty,
       totalCartons: groupCartons,
@@ -784,6 +1283,75 @@ export function createPickingWaveFromMasterItems(
     phase1Completed: false,
     preparedInvoices: []
   };
+}
+
+/**
+ * Performs smart automatic assignment of picking product groups to warehouse workers
+ * according to difficulty levels and worker experience.
+ */
+export function performSmartWorkerAssignment(
+  groups: PickingProductGroup[],
+  workers: WarehouseWorker[]
+): PickingProductGroup[] {
+  const activeWorkers = workers.filter(w => w.isActive);
+  if (activeWorkers.length === 0) return groups;
+
+  const expertWorkers = activeWorkers.filter(w => w.experienceLevel === 'EXPERT');
+  const intermediateWorkers = activeWorkers.filter(w => w.experienceLevel === 'INTERMEDIATE');
+  const noviceWorkers = activeWorkers.filter(w => w.experienceLevel === 'NOVICE');
+
+  // Track workload count per worker
+  const workerLoad = new Map<string, number>();
+  activeWorkers.forEach(w => workerLoad.set(w.id, 0));
+
+  const getBestWorker = (preferredPool: WarehouseWorker[], fallbackPools: WarehouseWorker[][]): WarehouseWorker => {
+    const pickLeastLoaded = (pool: WarehouseWorker[]) => {
+      if (pool.length === 0) return null;
+      let minWorker = pool[0];
+      let minLoad = workerLoad.get(minWorker.id) || 0;
+      for (const w of pool) {
+        const load = workerLoad.get(w.id) || 0;
+        if (load < minLoad) {
+          minLoad = load;
+          minWorker = w;
+        }
+      }
+      return minWorker;
+    };
+
+    let selected = pickLeastLoaded(preferredPool);
+    if (!selected) {
+      for (const pool of fallbackPools) {
+        selected = pickLeastLoaded(pool);
+        if (selected) break;
+      }
+    }
+    if (!selected) {
+      selected = activeWorkers[0];
+    }
+    workerLoad.set(selected.id, (workerLoad.get(selected.id) || 0) + 1);
+    return selected;
+  };
+
+  return groups.map(group => {
+    let chosenWorker: WarehouseWorker;
+
+    if (group.difficulty === 'HIGH_EXPERT') {
+      chosenWorker = getBestWorker(expertWorkers, [intermediateWorkers, noviceWorkers]);
+    } else if (group.difficulty === 'MEDIUM_INTERMEDIATE') {
+      chosenWorker = getBestWorker(intermediateWorkers, [expertWorkers, noviceWorkers]);
+    } else {
+      // LOW_NOVICE
+      chosenWorker = getBestWorker(noviceWorkers, [intermediateWorkers, expertWorkers]);
+    }
+
+    return {
+      ...group,
+      assignedWorkerId: chosenWorker.id,
+      assignedWorkerName: chosenWorker.name,
+      assignedWorkerLevel: chosenWorker.experienceLevel,
+    };
+  });
 }
 
 /**

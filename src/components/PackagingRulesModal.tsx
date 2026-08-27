@@ -17,10 +17,13 @@ import {
   Sparkles,
   ArrowRightLeft,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  RotateCcw,
+  ShieldCheck,
+  Calculator
 } from 'lucide-react';
-import type { PackagingGroupRule } from '../types';
-import { savePackagingGroupRules } from '../services/db';
+import type { PackagingGroupRule, GroupDifficultyLevel } from '../types';
+import { savePackagingGroupRules, resetPackagingGroupRulesToDefault } from '../services/db';
 import {
   downloadPackagingRulesExcelTemplate,
   parsePackagingRulesExcel,
@@ -54,21 +57,37 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
     name: string;
     startBarcode: string;
     endBarcode: string;
-    category: string;
+    systemUnit: string;
+    baseUnit: string;
+    cartonSizeSystemUnit: string;
+    cartonSizeBaseUnit: string;
+    packSizeDesc: string;
+    boxesPerCarton: number;
+    conversionEquation: string;
+    cartonEquation: string;
     cartonFactor: number;
     packFactor: number;
+    difficultyLevel: GroupDifficultyLevel;
     unitName: string;
-    systemUnit: string;
+    category: string;
     notes: string;
   }>({
     name: '',
     startBarcode: '',
     endBarcode: '',
-    category: '',
-    cartonFactor: 24,
-    packFactor: 6,
-    unitName: 'حبة',
-    systemUnit: 'حبة',
+    systemUnit: 'DZ',
+    baseUnit: 'HDZ',
+    cartonSizeSystemUnit: '6 DZ',
+    cartonSizeBaseUnit: '12 HDZ',
+    packSizeDesc: '6 PCS',
+    boxesPerCarton: 12,
+    conversionEquation: 'HDZ=.5DZ',
+    cartonEquation: '1CARTON=12BOX(HDZ)=6DZ',
+    cartonFactor: 12,
+    packFactor: 1,
+    difficultyLevel: 'HIGH_EXPERT',
+    unitName: 'HDZ',
+    category: 'أدوات مطبخ وسكاكين',
     notes: '',
   });
 
@@ -97,17 +116,16 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
         ...r,
         ...formState,
       } : r);
-      showNotification(isRtl ? 'تم تحديث شرط المجموعة بنجاح وتوحيده بالسيستم' : 'Rule updated successfully', 'SUCCESS');
+      showNotification(isRtl ? 'تم تحديث شرط ومعادلة المجموعة بنجاح وتوحيدها بالسيستم' : 'Rule updated successfully', 'SUCCESS');
     } else {
       const newRule: PackagingGroupRule = {
         id: `rule-${Date.now()}`,
         ...formState,
-        baseUnit: formState.unitName,
         isActive: true,
         createdAt: new Date().toISOString(),
       };
       updated = [newRule, ...ruleList];
-      showNotification(isRtl ? 'تمت إضافة شرط المجموعة الجديد بنجاح' : 'New rule created successfully', 'SUCCESS');
+      showNotification(isRtl ? 'تمت إضافة شرط ومعادلة المجموعة الجديدة بنجاح' : 'New rule created successfully', 'SUCCESS');
     }
 
     setRuleList(updated);
@@ -120,11 +138,19 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
       name: '',
       startBarcode: '',
       endBarcode: '',
+      systemUnit: 'DZ',
+      baseUnit: 'HDZ',
+      cartonSizeSystemUnit: '6 DZ',
+      cartonSizeBaseUnit: '12 HDZ',
+      packSizeDesc: '6 PCS',
+      boxesPerCarton: 12,
+      conversionEquation: 'HDZ=.5DZ',
+      cartonEquation: '1CARTON=12BOX(HDZ)=6DZ',
+      cartonFactor: 12,
+      packFactor: 1,
+      difficultyLevel: 'HIGH_EXPERT',
+      unitName: 'HDZ',
       category: '',
-      cartonFactor: 24,
-      packFactor: 6,
-      unitName: 'حبة',
-      systemUnit: 'حبة',
       notes: '',
     });
   };
@@ -135,11 +161,19 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
       name: rule.name,
       startBarcode: rule.startBarcode,
       endBarcode: rule.endBarcode,
-      category: rule.category || '',
+      systemUnit: rule.systemUnit || 'DZ',
+      baseUnit: rule.baseUnit || 'HDZ',
+      cartonSizeSystemUnit: rule.cartonSizeSystemUnit || '',
+      cartonSizeBaseUnit: rule.cartonSizeBaseUnit || '',
+      packSizeDesc: rule.packSizeDesc || '',
+      boxesPerCarton: rule.boxesPerCarton || 4,
+      conversionEquation: rule.conversionEquation || '',
+      cartonEquation: rule.cartonEquation || '',
       cartonFactor: rule.cartonFactor || 24,
       packFactor: rule.packFactor || 6,
+      difficultyLevel: rule.difficultyLevel || 'MEDIUM_INTERMEDIATE',
       unitName: rule.unitName || 'حبة',
-      systemUnit: rule.systemUnit || rule.unitName || 'حبة',
+      category: rule.category || '',
       notes: rule.notes || '',
     });
     setIsAddingNew(true);
@@ -160,6 +194,15 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
     setRuleList(updated);
     onUpdateRules(updated);
     await savePackagingGroupRules(updated);
+  };
+
+  const handleResetDefaults = async () => {
+    if (confirm(isRtl ? 'هل تريد استعادة جميع شروط ومعادلات وقوائم العبوات الـ 14 الافتراضية وفقاً للمرفق؟' : 'Reset all 14 packaging rules to default from attachment?')) {
+      const defs = await resetPackagingGroupRulesToDefault();
+      setRuleList(defs);
+      onUpdateRules(defs);
+      showNotification(isRtl ? 'تم استعادة كافة قواعد ومعادلات العبوات الـ 14 بنجاح!' : 'Reset 14 packaging rules successfully!', 'SUCCESS');
+    }
   };
 
   // Clone / Add Similar Group for Same Conditions (إضافة مجموعة متشابهة أخرى لنفس الشروط)
@@ -184,14 +227,21 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
       name,
       startBarcode: startCode,
       endBarcode: endCode,
+      systemUnit: baseRule.systemUnit,
+      baseUnit: baseRule.baseUnit,
+      cartonSizeSystemUnit: baseRule.cartonSizeSystemUnit,
+      cartonSizeBaseUnit: baseRule.cartonSizeBaseUnit,
+      packSizeDesc: baseRule.packSizeDesc,
+      boxesPerCarton: baseRule.boxesPerCarton,
+      conversionEquation: baseRule.conversionEquation,
+      cartonEquation: baseRule.cartonEquation,
       category: baseRule.category,
       cartonFactor: baseRule.cartonFactor,
       packFactor: baseRule.packFactor,
+      difficultyLevel: baseRule.difficultyLevel,
       unitName: baseRule.unitName,
-      systemUnit: baseRule.systemUnit || baseRule.unitName,
-      baseUnit: baseRule.baseUnit || baseRule.unitName,
       isActive: true,
-      notes: `مجموعة متشابهة مكررة من (${baseRule.name}) بنفس الشروط ومعاملات الصرف والتغليف`,
+      notes: `مجموعة متشابهة مكررة من (${baseRule.name}) بنفس الشروط والمعادلات`,
       createdAt: new Date().toISOString(),
     };
 
@@ -207,7 +257,7 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
 
     showNotification(
       isRtl 
-        ? `🎉 تم تفعيل نفس الشروط للمجموعة المتشابهة (${name}) وتوحيدها في كافة خدمات المستودع!`
+        ? `🎉 تم تفعيل نفس الشروط والمعادلات للمجموعة المتشابهة (${name}) وتوحيدها في كافة خدمات المستودع!`
         : `🎉 Similar group (${name}) added and applied to all services!`,
       'SUCCESS'
     );
@@ -226,9 +276,8 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
       }
 
       if (result.rules.length > 0) {
-        // Merge without duplicating existing IDs
-        const existingIds = new Set(ruleList.map(r => r.startBarcode + '-' + r.endBarcode));
-        const newOnes = result.rules.filter(r => !existingIds.has(r.startBarcode + '-' + r.endBarcode));
+        const existingRanges = new Set(ruleList.map(r => r.startBarcode + '-' + r.endBarcode));
+        const newOnes = result.rules.filter(r => !existingRanges.has(r.startBarcode + '-' + r.endBarcode));
         const merged = [...newOnes, ...ruleList];
 
         setRuleList(merged);
@@ -237,7 +286,7 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
 
         showNotification(
           isRtl 
-            ? `✅ تم استيراد وتفعيل ${result.rules.length} شروط تجميع عبوات من ملف الإكسيل بنجاح!` 
+            ? `✅ تم استيراد وتفعيل ${result.rules.length} شروط ومعادلات تجميع عبوات من ملف الإكسيل بنجاح!` 
             : `✅ Imported ${result.rules.length} packaging rules from Excel!`,
           'SUCCESS'
         );
@@ -254,7 +303,7 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-sm overflow-y-auto">
       <div 
-        className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl space-y-4 my-8"
+        className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-5xl overflow-hidden shadow-2xl space-y-4 my-8"
         dir={isRtl ? 'rtl' : 'ltr'}
       >
         {/* Header */}
@@ -265,25 +314,36 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                <span>{isRtl ? 'شروط ضم المنتجات في مجموعات متشابهة العبوة' : 'Packaging Grouping & Barcode Rules'}</span>
+                <span>{isRtl ? 'قوائم وشروط ومعادلات العبوات والاسناد' : 'Packaging Rules, Formulas & Assignments'}</span>
                 <span className="text-xs px-2 py-0.5 bg-indigo-500/20 text-indigo-300 rounded-full border border-indigo-500/30">
-                  {ruleList.length} {isRtl ? 'مجموعات معرفة' : 'Rules'}
+                  {ruleList.length} {isRtl ? 'قواعد معرفة' : 'Rules'}
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
                 {isRtl 
-                  ? 'تحديد نطاقات الباركود والوحدة المعرفة على السيستم للصرف ومعاملات الكراتين والباكتات لجرد المخزون وقوائم الانتقاء' 
-                  : 'Define barcode range rules, system issue units & conversion factors for picking, audit & inventory'}
+                  ? 'معادلات الكراتين والبوكسات، معاملات التحويل، الوحدات المعرفة على السيستم، وتوزيع مستويات الصعوبة' 
+                  : 'Carton equations, conversion formulas, system units, and worker difficulty assignments'}
               </p>
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleResetDefaults}
+              className="p-2 rounded-xl bg-slate-800 text-amber-400 hover:text-amber-300 hover:bg-slate-700 transition-colors flex items-center gap-1.5 text-xs font-semibold"
+              title={isRtl ? 'استعادة الـ 14 قاعدة الافتراضية وفقاً للمرفق' : 'Reset default 14 rules'}
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span className="hidden sm:inline">{isRtl ? 'استعادة الافتراضي (14)' : 'Reset Default'}</span>
+            </button>
+
+            <button
+              onClick={onClose}
+              className="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Status Notice */}
@@ -306,7 +366,7 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
             <button
               onClick={() => downloadPackagingRulesExcelTemplate()}
               className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
-              title={isRtl ? 'تحميل نموذج إكسيل تفصيلي لتعبئة شروط العبوات' : 'Download Excel Template'}
+              title={isRtl ? 'تحميل نموذج إكسيل تفصيلي لتعبئة شروط العبوات والمعادلات' : 'Download Excel Template'}
             >
               <Download className="w-3.5 h-3.5 text-emerald-400" />
               <span>{isRtl ? 'تحميل نموذج إكسيل تفصيلي' : 'Excel Template'}</span>
@@ -340,7 +400,7 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
               className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
             >
               <Plus className="w-4 h-4" />
-              <span>{isRtl ? 'إضافة شرط جديد' : 'New Rule'}</span>
+              <span>{isRtl ? 'إضافة شرط / معادلة جديدة' : 'New Rule'}</span>
             </button>
           )}
         </div>
@@ -352,7 +412,7 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
               <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                 <span className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-indigo-400" />
-                  {editingId ? (isRtl ? 'تعديل شرط المجموعة' : 'Edit Packaging Rule') : (isRtl ? 'إضافة شرط مجموعة عبوات جديد' : 'Add New Packaging Rule')}
+                  {editingId ? (isRtl ? 'تعديل شرط ومعادلة المجموعة' : 'Edit Packaging Rule') : (isRtl ? 'إضافة شرط ومعادلة مجموعة عبوات جديدة' : 'Add New Packaging Rule')}
                 </span>
                 <button
                   onClick={() => { setIsAddingNew(false); setEditingId(null); }}
@@ -363,7 +423,7 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                <div className="sm:col-span-2 md:col-span-3">
+                <div className="sm:col-span-2">
                   <label className="block text-xs font-semibold text-slate-400 mb-1">
                     {isRtl ? 'اسم المجموعة العبوية' : 'Group Name'}
                   </label>
@@ -371,96 +431,173 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
                     type="text"
                     value={formState.name}
                     onChange={(e) => setFormState(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="مثال: مجموعة العصائر 250 مل (كرتون 24 / باكت 6)"
+                    placeholder="مثال: أطقم سكاكين ستيل"
                     className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 mb-1">
+                    {isRtl ? 'التصنيف / الفئة' : 'Category'}
+                  </label>
+                  <input
+                    type="text"
+                    value={formState.category}
+                    onChange={(e) => setFormState(prev => ({ ...prev, category: e.target.value }))}
+                    placeholder="أدوات مطبخ وسكاكين"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-emerald-400 mb-1">
                     {isRtl ? 'باركود البداية (من)' : 'Start Barcode'}
                   </label>
                   <input
                     type="text"
                     value={formState.startBarcode}
                     onChange={(e) => setFormState(prev => ({ ...prev, startBarcode: e.target.value }))}
-                    placeholder="مثال: 6221000100"
+                    placeholder="مثال: 114110001"
                     className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-emerald-400 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">
+                  <label className="block text-xs font-semibold text-emerald-400 mb-1">
                     {isRtl ? 'باركود النهاية (إلى)' : 'End Barcode'}
                   </label>
                   <input
                     type="text"
                     value={formState.endBarcode}
                     onChange={(e) => setFormState(prev => ({ ...prev, endBarcode: e.target.value }))}
-                    placeholder="مثال: 6221000199"
+                    placeholder="مثال: 115412004"
                     className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-emerald-400 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-amber-300 mb-1">
-                    {isRtl ? 'الوحدة المعرفة على السيستم للصرف' : 'System Issue Unit'}
+                    {isRtl ? 'الوحدة المعرفة على السيستم' : 'System Unit'}
                   </label>
                   <select
                     value={formState.systemUnit}
                     onChange={(e) => setFormState(prev => ({ ...prev, systemUnit: e.target.value }))}
                     className="w-full bg-slate-900 border border-amber-500/40 rounded-lg px-3 py-2 text-xs text-amber-300 focus:outline-none focus:border-amber-400 font-bold"
                   >
-                    <option value="حبة">حبة (Piece)</option>
-                    <option value="قطعة">قطعة (Unit)</option>
-                    <option value="باكيت">باكيت (Pack / Shrink)</option>
+                    <option value="DZ">DZ (دستة)</option>
+                    <option value="EA">EA (حبة)</option>
+                    <option value="PCS">PCS (قطعة)</option>
+                    <option value="HDZ">HDZ (نصف دستة)</option>
+                    <option value="باكيت">باكيت (Pack)</option>
                     <option value="بوكس">بوكس (Box)</option>
                     <option value="كرتونة">كرتونة (Carton)</option>
-                    <option value="شد">شد (Bundle)</option>
-                    <option value="كيس">كيس (Bag)</option>
-                    <option value="دستة">دستة (Dozen)</option>
-                    <option value="طرد">طرد (Parcel)</option>
-                    <option value="عبوة">عبوة (Bottle / Can)</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 mb-1">
-                    {isRtl ? 'معامل الكرتونة / البوكس (حبة/كرتون)' : 'Carton / Box Factor'}
+                    {isRtl ? 'الوحدة الأساسية' : 'Base Unit'}
                   </label>
                   <input
-                    type="number"
-                    min="1"
-                    value={formState.cartonFactor}
-                    onChange={(e) => setFormState(prev => ({ ...prev, cartonFactor: Number(e.target.value) || 1 }))}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-amber-300 focus:outline-none focus:border-indigo-500"
+                    type="text"
+                    value={formState.baseUnit}
+                    onChange={(e) => setFormState(prev => ({ ...prev, baseUnit: e.target.value }))}
+                    placeholder="HDZ / EA / PCS"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 mb-1">
-                    {isRtl ? 'معامل الباكت / الشد (حبة/باكت)' : 'Pack / Shrink Factor'}
+                    {isRtl ? 'حجم الكرتونة بوحدة السيستم' : 'Carton Size (System Unit)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={formState.cartonSizeSystemUnit}
+                    onChange={(e) => setFormState(prev => ({ ...prev, cartonSizeSystemUnit: e.target.value }))}
+                    placeholder="6 DZ / 12 PCS / 24 EA"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">
+                    {isRtl ? 'حجم الكرتونة بالوحدة الأساسية' : 'Carton Size (Base Unit)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={formState.cartonSizeBaseUnit}
+                    onChange={(e) => setFormState(prev => ({ ...prev, cartonSizeBaseUnit: e.target.value }))}
+                    placeholder="12 HDZ / 20 PCS / 48 EA"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">
+                    {isRtl ? 'حجم الباكت / البوكس' : 'Pack / Box Size'}
+                  </label>
+                  <input
+                    type="text"
+                    value={formState.packSizeDesc}
+                    onChange={(e) => setFormState(prev => ({ ...prev, packSizeDesc: e.target.value }))}
+                    placeholder="6 PCS / 6 EA / 5 PCS"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">
+                    {isRtl ? 'عدد البوكسات في الكرتونة' : 'Boxes Per Carton'}
                   </label>
                   <input
                     type="number"
                     min="1"
-                    value={formState.packFactor}
-                    onChange={(e) => setFormState(prev => ({ ...prev, packFactor: Number(e.target.value) || 1 }))}
+                    value={formState.boxesPerCarton}
+                    onChange={(e) => setFormState(prev => ({ ...prev, boxesPerCarton: Number(e.target.value) || 1 }))}
                     className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-indigo-300 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">
-                    {isRtl ? 'اسم الوحدة الفردية الصغرى' : 'Base Single Unit'}
+                  <label className="block text-xs font-semibold text-amber-300 mb-1">
+                    {isRtl ? 'معادلة التحويل' : 'Conversion Equation'}
                   </label>
                   <input
                     type="text"
-                    value={formState.unitName}
-                    onChange={(e) => setFormState(prev => ({ ...prev, unitName: e.target.value }))}
-                    placeholder="حبة / علبة / قطعة"
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                    value={formState.conversionEquation}
+                    onChange={(e) => setFormState(prev => ({ ...prev, conversionEquation: e.target.value }))}
+                    placeholder="HDZ=.5DZ أو EA=1/12DZ"
+                    className="w-full bg-slate-900 border border-amber-500/40 rounded-lg px-3 py-2 text-xs font-mono text-amber-300 focus:outline-none focus:border-amber-400"
                   />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-emerald-400 mb-1">
+                    {isRtl ? 'معادلة الكرتونة الكاملة' : 'Carton Equation'}
+                  </label>
+                  <input
+                    type="text"
+                    value={formState.cartonEquation}
+                    onChange={(e) => setFormState(prev => ({ ...prev, cartonEquation: e.target.value }))}
+                    placeholder="1CARTON=12BOX(HDZ)=6DZ"
+                    className="w-full bg-slate-900 border border-emerald-500/40 rounded-lg px-3 py-2 text-xs font-mono text-emerald-300 focus:outline-none focus:border-emerald-400 font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-indigo-300 mb-1">
+                    {isRtl ? 'مستوى صعوبة التجهيز والاسناد' : 'Difficulty & Worker Assignment'}
+                  </label>
+                  <select
+                    value={formState.difficultyLevel}
+                    onChange={(e) => setFormState(prev => ({ ...prev, difficultyLevel: e.target.value as GroupDifficultyLevel }))}
+                    className="w-full bg-slate-900 border border-indigo-500/40 rounded-lg px-3 py-2 text-xs text-indigo-300 focus:outline-none focus:border-indigo-400 font-bold"
+                  >
+                    <option value="HIGH_EXPERT">عالي (يسند للعمال الخبراء)</option>
+                    <option value="MEDIUM_INTERMEDIATE">متوسط (يسند للعمال متوسطي الخبرة)</option>
+                    <option value="LOW_NOVICE">سهل (يسند للعمال المبتدئين والتجهيز السريع)</option>
+                  </select>
                 </div>
 
                 <div className="sm:col-span-2 md:col-span-3">
@@ -471,7 +608,7 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
                     type="text"
                     value={formState.notes}
                     onChange={(e) => setFormState(prev => ({ ...prev, notes: e.target.value }))}
-                    placeholder="ملاحظات الصرف والتغليف..."
+                    placeholder="ملاحظات النطاق والتغليف..."
                     className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
                   />
                 </div>
@@ -483,7 +620,7 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
                   className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-md transition-all"
                 >
                   <Save className="w-4 h-4" />
-                  <span>{isRtl ? 'حفظ وتفعيل شرط المجموعة' : 'Save & Apply Rule'}</span>
+                  <span>{isRtl ? 'حفظ وتفعيل شرط ومعادلة المجموعة' : 'Save & Apply Rule'}</span>
                 </button>
               </div>
             </div>
@@ -492,76 +629,102 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
           {/* List of Defined Rules */}
           <div className="space-y-3">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-              <span>{isRtl ? 'قائمة شروط المجموعات الحالية النشطة' : 'Active Packaging Rules'}</span>
+              <span>{isRtl ? 'قائمة شروط ومعادلات العبوات المعرفة' : 'Packaging Rules & Equations'}</span>
               <span className="text-[11px] text-slate-500">
-                {isRtl ? 'تطبق تلقائياً على كل باركود وارد أو ممسوح' : 'Applied automatically'}
+                {isRtl ? 'تطبق تلقائياً على كل باركود وارد أو ممسوح في الموجات والجرد' : 'Applied automatically'}
               </span>
             </h3>
 
-            {ruleList.map(rule => (
-              <div 
-                key={rule.id} 
-                className={`p-3.5 bg-slate-950/90 border rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
-                  rule.isActive ? 'border-slate-800 hover:border-slate-700' : 'border-slate-800/40 opacity-50'
-                }`}
-              >
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-bold text-white text-xs sm:text-sm">{rule.name}</span>
-                    {rule.category && (
-                      <span className="text-[10px] bg-slate-800 text-indigo-300 px-2 py-0.5 rounded font-semibold border border-slate-700">
-                        {rule.category}
+            <div className="space-y-2.5">
+              {ruleList.map(rule => (
+                <div 
+                  key={rule.id} 
+                  className={`p-3.5 bg-slate-950/90 border rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3 transition-all ${
+                    rule.isActive ? 'border-slate-800 hover:border-slate-700' : 'border-slate-800/40 opacity-50'
+                  }`}
+                >
+                  <div className="space-y-2 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-bold text-white text-xs sm:text-sm">{rule.name}</span>
+                      {rule.category && (
+                        <span className="text-[10px] bg-slate-800 text-indigo-300 px-2 py-0.5 rounded font-semibold border border-slate-700">
+                          {rule.category}
+                        </span>
+                      )}
+                      <span className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-800/60 px-2 py-0.5 rounded font-bold">
+                        الوحدة المعرفة: {rule.systemUnit || rule.unitName || 'حبة'}
                       </span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                        rule.difficultyLevel === 'HIGH_EXPERT' 
+                          ? 'bg-rose-950 text-rose-300 border border-rose-800' 
+                          : rule.difficultyLevel === 'LOW_NOVICE' 
+                          ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' 
+                          : 'bg-blue-950 text-blue-300 border border-blue-800'
+                      }`}>
+                        {rule.difficultyLevel === 'HIGH_EXPERT' ? 'عالي (خبير)' : rule.difficultyLevel === 'LOW_NOVICE' ? 'سهل (مبتدئ)' : 'متوسط'}
+                      </span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${rule.isActive ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-slate-800 text-slate-400'}`}>
+                        {rule.isActive ? 'مفعّل' : 'معطّل'}
+                      </span>
+                    </div>
+
+                    {/* Equations and Packaging Breakdown Badges */}
+                    <div className="text-xs text-slate-400 flex flex-wrap items-center gap-2 sm:gap-3">
+                      <span className="font-mono text-emerald-300 bg-slate-900 px-2 py-0.5 rounded border border-slate-800 text-[11px]">
+                        النطاق: {rule.startBarcode} ⟵ {rule.endBarcode}
+                      </span>
+                      {rule.cartonEquation && (
+                        <span className="font-mono text-amber-300 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-800/40 text-[11px] font-bold">
+                          المعادلة: {rule.cartonEquation}
+                        </span>
+                      )}
+                      {rule.conversionEquation && (
+                        <span className="font-mono text-cyan-300 bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-800/40 text-[11px]">
+                          التحويل: {rule.conversionEquation}
+                        </span>
+                      )}
+                      {rule.cartonSizeSystemUnit && (
+                        <span className="text-slate-300 text-[11px]">
+                          حجم الكرتونة: {rule.cartonSizeSystemUnit}
+                        </span>
+                      )}
+                      {rule.packSizeDesc && (
+                        <span className="text-slate-300 text-[11px]">
+                          الباكت: {rule.packSizeDesc}
+                        </span>
+                      )}
+                    </div>
+
+                    {rule.notes && (
+                      <p className="text-[11px] text-slate-500">{rule.notes}</p>
                     )}
-                    <span className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-800/60 px-2 py-0.5 rounded font-bold">
-                      الوحدة المعرفة: {rule.systemUnit || rule.unitName || 'حبة'}
-                    </span>
-                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${rule.isActive ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-slate-800 text-slate-400'}`}>
-                      {rule.isActive ? 'مفعّل' : 'معطّل'}
-                    </span>
                   </div>
 
-                  <div className="text-xs text-slate-400 flex flex-wrap items-center gap-3">
-                    <span className="font-mono text-emerald-300 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-                      النطاق: {rule.startBarcode} ⟵ {rule.endBarcode}
-                    </span>
-                    <span className="text-amber-300 font-semibold">
-                      الكرتونة/البوكس: {rule.cartonFactor} {rule.unitName}
-                    </span>
-                    <span className="text-indigo-300 font-semibold">
-                      الباكت/الشد: {rule.packFactor} {rule.unitName}
-                    </span>
+                  <div className="flex items-center gap-2 self-end md:self-center shrink-0">
+                    <button
+                      onClick={() => handleToggleActive(rule.id)}
+                      className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-lg text-xs border border-slate-800 transition-colors"
+                    >
+                      {rule.isActive ? 'تعطيل' : 'تفعيل'}
+                    </button>
+                    <button
+                      onClick={() => handleStartEdit(rule)}
+                      className="p-1.5 bg-slate-900 hover:bg-slate-800 text-indigo-400 rounded-lg border border-slate-800 transition-colors"
+                      title="تعديل"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteRule(rule.id)}
+                      className="p-1.5 bg-slate-900 hover:bg-red-950 text-red-400 rounded-lg border border-slate-800 transition-colors"
+                      title="حذف"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-
-                  {rule.notes && (
-                    <p className="text-[11px] text-slate-500">{rule.notes}</p>
-                  )}
                 </div>
-
-                <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                  <button
-                    onClick={() => handleToggleActive(rule.id)}
-                    className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-lg text-xs border border-slate-800 transition-colors"
-                  >
-                    {rule.isActive ? 'تعطيل' : 'تفعيل'}
-                  </button>
-                  <button
-                    onClick={() => handleStartEdit(rule)}
-                    className="p-1.5 bg-slate-900 hover:bg-slate-800 text-indigo-400 rounded-lg border border-slate-800 transition-colors"
-                    title="تعديل"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteRule(rule.id)}
-                    className="p-1.5 bg-slate-900 hover:bg-red-950 text-red-400 rounded-lg border border-slate-800 transition-colors"
-                    title="حذف"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
 
           {/* =============================================================== */}
@@ -575,12 +738,12 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
                 </div>
                 <div>
                   <h4 className="text-xs sm:text-sm font-bold text-white">
-                    {isRtl ? 'إضافة مجموعة متشابهة أخرى لنفس الشروط' : 'Add Similar Group for Same Conditions'}
+                    {isRtl ? 'إضافة مجموعة متشابهة أخرى لنفس الشروط والمعادلات' : 'Add Similar Group for Same Conditions & Equations'}
                   </h4>
                   <p className="text-[11px] text-indigo-300/80">
                     {isRtl 
-                      ? 'تكرار نفس معاملات الكرتون والباكت والوحدة المعرفة لنطاق كود/باركود جديد وتوحيدها بكل الخدمات' 
-                      : 'Clone packaging and conversion factors to another barcode range'}
+                      ? 'تكرار نفس معادلات الكرتون، معاملات التحويل، والوحدة المعرفة لنطاق كود/باركود جديد وتوحيدها بكل الخدمات' 
+                      : 'Clone packaging and conversion equations to another barcode range'}
                   </p>
                 </div>
               </div>
@@ -599,7 +762,7 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
                 >
                   {ruleList.map(r => (
                     <option key={r.id} value={r.id}>
-                      {r.name} — [كرتون {r.cartonFactor} / باكت {r.packFactor} / الوحدة المعرفة: {r.systemUnit || r.unitName}]
+                      {r.name} — [{r.cartonEquation || `كرتون ${r.cartonFactor}`} / الوحدة: {r.systemUnit || r.unitName}]
                     </option>
                   ))}
                 </select>
@@ -614,7 +777,7 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
                   type="text"
                   value={similarGroupName}
                   onChange={(e) => setSimilarGroupName(e.target.value)}
-                  placeholder={selectedBaseRule ? `مثال: ${selectedBaseRule.name} - تشغيلة جديدة` : 'اسم المجموعة...'}
+                  placeholder={selectedBaseRule ? `مثال: ${selectedBaseRule.name} - دفعة جديدة` : 'اسم المجموعة...'}
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
@@ -628,7 +791,7 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
                   type="text"
                   value={similarStartBarcode}
                   onChange={(e) => setSimilarStartBarcode(e.target.value)}
-                  placeholder="مثال: 6223000100"
+                  placeholder="مثال: 184000571"
                   className="w-full bg-slate-900 border border-emerald-600/50 rounded-lg px-3 py-2 text-xs font-mono text-emerald-300 focus:outline-none focus:border-emerald-400"
                 />
               </div>
@@ -642,7 +805,7 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
                   type="text"
                   value={similarEndBarcode}
                   onChange={(e) => setSimilarEndBarcode(e.target.value)}
-                  placeholder="مثال: 6223000999"
+                  placeholder="مثال: 184100017"
                   className="w-full bg-slate-900 border border-emerald-600/50 rounded-lg px-3 py-2 text-xs font-mono text-emerald-300 focus:outline-none focus:border-emerald-400"
                 />
               </div>
@@ -650,13 +813,17 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
 
             {/* Cloned Summary Preview */}
             {selectedBaseRule && (
-              <div className="p-2.5 bg-slate-950/70 border border-slate-800 rounded-lg flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-lg flex flex-wrap items-center justify-between gap-3 text-xs">
                 <div className="flex flex-wrap items-center gap-3 text-slate-400">
-                  <span>الشروط الموروثة:</span>
-                  <span className="text-amber-300 font-bold">الوحدة المعرفة: {selectedBaseRule.systemUnit || selectedBaseRule.unitName}</span>
-                  <span className="text-amber-300 font-semibold">الكرتون: {selectedBaseRule.cartonFactor} {selectedBaseRule.unitName}</span>
-                  <span className="text-indigo-300 font-semibold">الباكت: {selectedBaseRule.packFactor} {selectedBaseRule.unitName}</span>
-                  {selectedBaseRule.category && <span className="text-slate-300">الفئة: {selectedBaseRule.category}</span>}
+                  <span className="font-semibold text-slate-300">الشروط والمعادلات الموروثة:</span>
+                  <span className="text-amber-300 font-bold">الوحدة: {selectedBaseRule.systemUnit || selectedBaseRule.unitName}</span>
+                  {selectedBaseRule.cartonEquation && (
+                    <span className="text-emerald-300 font-mono font-semibold">{selectedBaseRule.cartonEquation}</span>
+                  )}
+                  {selectedBaseRule.conversionEquation && (
+                    <span className="text-cyan-300 font-mono">{selectedBaseRule.conversionEquation}</span>
+                  )}
+                  <span className="text-indigo-300">الصعوبة: {selectedBaseRule.difficultyLevel === 'HIGH_EXPERT' ? 'خبير' : selectedBaseRule.difficultyLevel === 'LOW_NOVICE' ? 'مبتدئ' : 'متوسط'}</span>
                 </div>
 
                 <button
@@ -687,3 +854,4 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
     </div>
   );
 };
+
