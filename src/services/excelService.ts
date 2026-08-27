@@ -1929,6 +1929,7 @@ export async function parsePackagingRulesExcel(file: File): Promise<{ rules: Pac
             difficultyLevel = 'LOW_NOVICE';
           }
 
+          const assignedRoleDesc = normalized['نمط_الإسناد_المعين'] || normalized['نمط_الإسناد'] || normalized['نمطالإسناد'] || normalized['assignedroledesc'] || (difficultyLevel === 'HIGH_EXPERT' ? 'خبير (عامل خبرة)' : difficultyLevel === 'LOW_NOVICE' ? 'مبتدئ (عامل عادي / تجهيز سريع)' : 'متوسط (عامل متوسط الخبرة)');
           const category = normalized['التصنيف'] || normalized['المجموعة'] || normalized['category'] || 'عام';
           const notes = normalized['ملاحظات'] || normalized['notes'] || '';
 
@@ -1954,6 +1955,7 @@ export async function parsePackagingRulesExcel(file: File): Promise<{ rules: Pac
             cartonFactor,
             packFactor,
             difficultyLevel,
+            assignedRoleDesc,
             category,
             isActive: true,
             notes,
@@ -1997,6 +1999,7 @@ export function exportPackagingRulesToExcel(rules: PackagingGroupRule[]): void {
     'معامل_الكرتونة': r.cartonFactor,
     'معامل_الباكت': r.packFactor,
     'مستوى_صعوبة_التجهيز': r.difficultyLevel === 'HIGH_EXPERT' ? 'عالي (خبير)' : r.difficultyLevel === 'LOW_NOVICE' ? 'سهل (مبتدئ)' : 'متوسط',
+    'نمط_الإسناد_المعين': r.assignedRoleDesc || (r.difficultyLevel === 'HIGH_EXPERT' ? 'خبير (عامل خبرة)' : r.difficultyLevel === 'LOW_NOVICE' ? 'مبتدئ (عامل عادي / تجهيز سريع)' : 'متوسط (عامل متوسط الخبرة)'),
     'اسم_الوحدة_الفردية': r.unitName,
     'التصنيف': r.category || '-',
     'الحالة': r.isActive ? 'مفعل نشط' : 'معطل',

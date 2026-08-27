@@ -167,9 +167,16 @@ export interface PackagingGroupRule {
   conversionEquation?: string;   // معادلة التحويل بين الوحدات (e.g. "HDZ=.5DZ", "EA=1/12DZ", "EA=EA", "PCS=PCS")
   cartonEquation?: string;       // معادلة الكرتونة والبوكس (e.g. "1CARTON=12BOX(HDZ)=6DZ", "1CARTON=4BOX=20PCS")
   difficultyLevel?: GroupDifficultyLevel; // 'HIGH_EXPERT' | 'MEDIUM_INTERMEDIATE' | 'LOW_NOVICE'
+  assignedRoleDesc?: string; // e.g. "خبير (عامل خبرة)" | "متوسط (عامل متوسط الخبرة)" | "مبتدئ (عامل عادي / تجهيز سريع)"
   isActive: boolean;
   notes?: string;
   createdAt: string;
+}
+
+export interface WorkerAssignmentMatrixItem {
+  difficulty: string;
+  assignment: string;
+  workerLevelDesc: string;
 }
 
 // -------------------------------------------------------------

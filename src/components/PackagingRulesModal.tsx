@@ -23,7 +23,7 @@ import {
   Calculator
 } from 'lucide-react';
 import type { PackagingGroupRule, GroupDifficultyLevel } from '../types';
-import { savePackagingGroupRules, resetPackagingGroupRulesToDefault } from '../services/db';
+import { savePackagingGroupRules, resetPackagingGroupRulesToDefault, WORKER_ASSIGNMENT_MATRIX } from '../services/db';
 import {
   downloadPackagingRulesExcelTemplate,
   parsePackagingRulesExcel,
@@ -68,6 +68,7 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
     cartonFactor: number;
     packFactor: number;
     difficultyLevel: GroupDifficultyLevel;
+    assignedRoleDesc: string;
     unitName: string;
     category: string;
     notes: string;
@@ -86,6 +87,7 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
     cartonFactor: 12,
     packFactor: 1,
     difficultyLevel: 'HIGH_EXPERT',
+    assignedRoleDesc: 'خبير (عامل خبرة)',
     unitName: 'HDZ',
     category: 'أدوات مطبخ وسكاكين',
     notes: '',
@@ -149,6 +151,7 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
       cartonFactor: 12,
       packFactor: 1,
       difficultyLevel: 'HIGH_EXPERT',
+      assignedRoleDesc: 'خبير (عامل خبرة)',
       unitName: 'HDZ',
       category: '',
       notes: '',
@@ -172,6 +175,7 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
       cartonFactor: rule.cartonFactor || 24,
       packFactor: rule.packFactor || 6,
       difficultyLevel: rule.difficultyLevel || 'MEDIUM_INTERMEDIATE',
+      assignedRoleDesc: rule.assignedRoleDesc || (rule.difficultyLevel === 'HIGH_EXPERT' ? 'خبير (عامل خبرة)' : rule.difficultyLevel === 'LOW_NOVICE' ? 'مبتدئ (عامل عادي / تجهيز سريع)' : 'متوسط (عامل متوسط الخبرة)'),
       unitName: rule.unitName || 'حبة',
       category: rule.category || '',
       notes: rule.notes || '',
@@ -591,16 +595,37 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
                   </label>
                   <select
                     value={formState.difficultyLevel}
-                    onChange={(e) => setFormState(prev => ({ ...prev, difficultyLevel: e.target.value as GroupDifficultyLevel }))}
+                    onChange={(e) => {
+                      const diff = e.target.value as GroupDifficultyLevel;
+                      const roleDesc = diff === 'HIGH_EXPERT' 
+                        ? 'خبير (عامل خبرة)' 
+                        : diff === 'LOW_NOVICE' 
+                        ? 'مبتدئ (عامل عادي / تجهيز سريع)' 
+                        : 'متوسط (عامل متوسط الخبرة)';
+                      setFormState(prev => ({ ...prev, difficultyLevel: diff, assignedRoleDesc: roleDesc }));
+                    }}
                     className="w-full bg-slate-900 border border-indigo-500/40 rounded-lg px-3 py-2 text-xs text-indigo-300 focus:outline-none focus:border-indigo-400 font-bold"
                   >
-                    <option value="HIGH_EXPERT">عالي (يسند للعمال الخبراء)</option>
+                    <option value="HIGH_EXPERT">عالي / صعب (يسند للعمال الخبراء)</option>
                     <option value="MEDIUM_INTERMEDIATE">متوسط (يسند للعمال متوسطي الخبرة)</option>
                     <option value="LOW_NOVICE">سهل (يسند للعمال المبتدئين والتجهيز السريع)</option>
                   </select>
                 </div>
 
-                <div className="sm:col-span-2 md:col-span-3">
+                <div>
+                  <label className="block text-xs font-semibold text-indigo-300 mb-1">
+                    {isRtl ? 'وصف نمط الاسناد (المعين للطلب)' : 'Assigned Role Description'}
+                  </label>
+                  <input
+                    type="text"
+                    value={formState.assignedRoleDesc}
+                    onChange={(e) => setFormState(prev => ({ ...prev, assignedRoleDesc: e.target.value }))}
+                    placeholder="مثال: خبير (عامل خبرة)"
+                    className="w-full bg-slate-900 border border-indigo-500/40 rounded-lg px-3 py-2 text-xs text-indigo-200 focus:outline-none focus:border-indigo-400 font-medium"
+                  />
+                </div>
+
+                <div className="sm:col-span-2 md:col-span-2">
                   <label className="block text-xs font-semibold text-slate-400 mb-1">
                     {isRtl ? 'ملاحظات الصرف والتحويل (اختياري)' : 'Notes'}
                   </label>
@@ -661,8 +686,13 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
                           ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' 
                           : 'bg-blue-950 text-blue-300 border border-blue-800'
                       }`}>
-                        {rule.difficultyLevel === 'HIGH_EXPERT' ? 'عالي (خبير)' : rule.difficultyLevel === 'LOW_NOVICE' ? 'سهل (مبتدئ)' : 'متوسط'}
+                        {rule.difficultyLevel === 'HIGH_EXPERT' ? 'عالي / حرج' : rule.difficultyLevel === 'LOW_NOVICE' ? 'سهل' : 'متوسط'}
                       </span>
+                      {rule.assignedRoleDesc && (
+                        <span className="text-[10px] bg-purple-950/70 text-purple-300 border border-purple-800/60 px-2 py-0.5 rounded font-medium">
+                          إسناد: {rule.assignedRoleDesc}
+                        </span>
+                      )}
                       <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${rule.isActive ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-slate-800 text-slate-400'}`}>
                         {rule.isActive ? 'مفعّل' : 'معطّل'}
                       </span>
@@ -721,6 +751,55 @@ export const PackagingRulesModal: React.FC<PackagingRulesModalProps> = ({
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* =============================================================== */}
+          {/* جدول مصفوفة الصعوبة والإسناد وطبيعة المنتجات (من أسفل الشيت)     */}
+          {/* =============================================================== */}
+          <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-xl space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-indigo-500/20 text-indigo-300 rounded-lg">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs sm:text-sm font-bold text-white">
+                    {isRtl ? 'مصفوفة معايير الصعوبة والإسناد المعتمدة للعمال' : 'Difficulty & Worker Assignment Matrix'}
+                  </h4>
+                  <p className="text-[11px] text-slate-400">
+                    {isRtl 
+                      ? 'ربط طبيعة المنتجات وصعوبتها بمستوى مهارة العامل (لا علاقة لحجم العبوة بنمط الإسناد)' 
+                      : 'Product nature & difficulty mapping to worker skill level'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
+              {WORKER_ASSIGNMENT_MATRIX.map((mat, idx) => (
+                <div key={idx} className="p-3 bg-slate-900/90 border border-slate-800 rounded-lg flex flex-col justify-between space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-slate-400">الصعوبة:</span>
+                    <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                      mat.difficulty.includes('حرج') || mat.difficulty.includes('صعب')
+                        ? 'bg-rose-950 text-rose-300 border border-rose-800/60'
+                        : mat.difficulty.includes('سهل')
+                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60'
+                        : 'bg-blue-950 text-blue-300 border border-blue-800/60'
+                    }`}>
+                      {mat.difficulty}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-slate-400">نمط الإسناد:</span>
+                    <span className="text-indigo-300 font-bold text-[11px]">{mat.assignment}</span>
+                  </div>
+                  <div className="pt-1.5 border-t border-slate-800 text-[10px] text-slate-400">
+                    {mat.workerLevelDesc}
                   </div>
                 </div>
               ))}
