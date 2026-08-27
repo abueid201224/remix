@@ -155,9 +155,11 @@ export interface PackagingGroupRule {
   startBarcode: string; // e.g. "6221000100"
   endBarcode: string;   // e.g. "6221000199"
   category?: string;
-  cartonFactor: number; // e.g. 24 pieces per master carton
+  cartonFactor: number; // e.g. 24 pieces per master carton / box
   packFactor: number;   // e.g. 6 pieces per shrink/inner pack
-  unitName: string;     // e.g. "حبة"
+  unitName: string;     // e.g. "حبة" (الوحدة الصغرى)
+  systemUnit?: string;  // e.g. "حبة" | "باكيت" | "بوكس" | "كرتونة" | "دستة" | "طرد" (الوحدة المعرفة على السيستم للصرف)
+  baseUnit?: string;    // e.g. "حبة"
   isActive: boolean;
   notes?: string;
   createdAt: string;
@@ -371,16 +373,17 @@ export interface AggregatedPickingItem {
   itemCode: string;
   itemName: string;
   unit: string;
+  systemUnit?: string; // الوحدة المعرفة على السيستم للصرف (حبة / باكيت / بوكس / كرتونة)
   groupId: string;
   groupName: string;
-  totalRequiredQty: number;
+  totalRequiredQty: number; // إجمالي كمية الصنف المطلوبة من كافة فواتير اليوم مجتمعة
   pickedQty: number; // For live picking / verification
   cartonFactor: number;
   packFactor: number;
   cartonsCount: number;
   packsCount: number;
   piecesCount: number;
-  invoiceSources: InvoiceItemSource[]; // detailed breakdown of invoices requesting this item
+  invoiceSources: InvoiceItemSource[]; // تفصيل الفواتير والكمية المطلوبة لكل فاتورة منفردة
   status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
   location?: string;
   notes?: string;
@@ -417,6 +420,8 @@ export interface BatchPickingWave {
   totalPieces: number;
   groups: PickingProductGroup[];
   status: 'DRAFT' | 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED';
+  phase1Completed?: boolean; // المرحلة الأولى: اكتمال التجميع الإجمالي لطلبات اليوم
+  preparedInvoices?: string[]; // قائمة بأرقام الفواتير التي تم فرزها وتجهيزها في المرحلة الثانية
   notes?: string;
 }
 

@@ -1505,6 +1505,7 @@ export async function parseMultiInvoicePickingExcel(
       itemCode: itemData.itemCode,
       itemName: itemData.itemName,
       unit: itemData.unit,
+      systemUnit: matchedRule?.systemUnit || itemData.unit || 'حبة',
       groupId: gId,
       groupName: gName,
       totalRequiredQty: totalQty,
@@ -1583,10 +1584,11 @@ export function downloadPickingExcelTemplate(): void {
       'كود الصنف': '6221000101',
       'اسم الصنف': 'عصير برتقال طبيعي 250 مل عبوة زجاجية',
       'الوحدة': 'حبة',
+      'الوحدة المعرفة على السيستم': 'حبة',
       'الكمية المطلوبة': 48,
       'المجموعة / التصنيف': 'مجموعة المشروبات والعصائر',
       'موقع التخزين': 'ممر A-01-02',
-      'ملاحظات': 'يحتاج لخبرة وعناية بالزجاج'
+      'ملاحظات': 'المرحلة 1: تجميع إجمالي / المرحلة 2: فرز للفاتورة'
     },
     {
       'رقم الفاتورة': '204002',
@@ -1595,10 +1597,11 @@ export function downloadPickingExcelTemplate(): void {
       'كود الصنف': '6221000101',
       'اسم الصنف': 'عصير برتقال طبيعي 250 مل عبوة زجاجية',
       'الوحدة': 'حبة',
+      'الوحدة المعرفة على السيستم': 'حبة',
       'الكمية المطلوبة': 24,
       'المجموعة / التصنيف': 'مجموعة المشروبات والعصائر',
       'موقع التخزين': 'ممر A-01-02',
-      'ملاحظات': 'دمج مع الفاتورة الأولى'
+      'ملاحظات': 'تجميع مع نفس الصنف لطلبات اليوم'
     },
     {
       'رقم الفاتورة': '204001',
@@ -1606,11 +1609,12 @@ export function downloadPickingExcelTemplate(): void {
       'اسم العميل': 'سوبرماركت النور',
       'كود الصنف': '6222000201',
       'اسم الصنف': 'مناديل ورقية فاخرة عبوة 500 منديل',
-      'الوحدة': 'حبة',
+      'الوحدة': 'عبوة',
+      'الوحدة المعرفة على السيستم': 'باكيت',
       'الكمية المطلوبة': 60,
       'المجموعة / التصنيف': 'مجموعة المناديل والاستهلاكيات',
       'موقع التخزين': 'ممر B-04-01',
-      'ملاحظات': 'تجهيز سريع بالكراتين'
+      'ملاحظات': 'الصرف بوحدة الباكيت'
     },
     {
       'رقم الفاتورة': '204003',
@@ -1618,11 +1622,12 @@ export function downloadPickingExcelTemplate(): void {
       'اسم العميل': 'مجمع الصيدليات المتحدة',
       'كود الصنف': '6223000301',
       'اسم الصنف': 'محلول معقم طبي مركز 500 مل',
-      'الوحدة': 'حبة',
+      'الوحدة': 'علبة',
+      'الوحدة المعرفة على السيستم': 'بوكس',
       'الكمية المطلوبة': 15,
       'المجموعة / التصنيف': 'مجموعة الأدوية والمستلزمات الطبية',
       'موقع التخزين': 'ممر C-02-05',
-      'ملاحظات': 'منتج حساس يحتاج لعامل خبير'
+      'ملاحظات': 'الصرف بوحدة البوكس'
     },
     {
       'رقم الفاتورة': '204002',
@@ -1631,16 +1636,17 @@ export function downloadPickingExcelTemplate(): void {
       'كود الصنف': '6224000401',
       'اسم الصنف': 'تونة خفيفة قطع بزيت دوار الشمس 185 جم',
       'الوحدة': 'حبة',
+      'الوحدة المعرفة على السيستم': 'حبة',
       'الكمية المطلوبة': 120,
       'المجموعة / التصنيف': 'مجموعة المعلبات الغذائية',
       'موقع التخزين': 'ممر D-01-03',
-      'ملاحظات': 'تجهيز متوسط'
+      'ملاحظات': 'تجهيز سريع كراتين'
     }
   ];
 
   const worksheet = XLSX.utils.json_to_sheet(sampleRows);
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'نموذج_انتقاء_الفواتير');
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'نموذج_انتقاء_الفواتير_المجمعة');
   XLSX.writeFile(workbook, `Picking_Wave_Template_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
@@ -1651,7 +1657,90 @@ export function exportPickingWaveToExcel(wave: BatchPickingWave, filterGroupId?:
     ? wave.groups.filter(g => g.groupId === filterGroupId) 
     : wave.groups;
 
-  // 1. Overview Sheet
+  // 1. Phase 1: Consolidated Total Daily Picking Sheet (المرحلة الأولى: قائمة التجميع الإجمالية لطلبات اليوم)
+  const phase1Rows: any[] = [];
+  groupsToExport.forEach(grp => {
+    grp.items.forEach((it, idx) => {
+      const invList = it.invoiceSources.map(s => `فاتورة #${s.invoiceNo} (${s.qty})`).join(' + ');
+      phase1Rows.push({
+        'م': phase1Rows.length + 1,
+        'المجموعة': grp.groupName,
+        'كود الصنف / الباركود': it.itemCode,
+        'اسم الصنف': it.itemName,
+        'الموقع بالمستودع': it.location || '-',
+        'الوحدة المعرفة على السيستم': it.systemUnit || it.unit,
+        'إجمالي الكمية المطلوبة لليوم': it.totalRequiredQty,
+        'الكمية الملتقطة فعلياً': it.pickedQty,
+        'عدد الكراتين': it.cartonsCount,
+        'معامل الكرتونة': it.cartonFactor,
+        'عدد الباكتات': it.packsCount,
+        'معامل الباكت': it.packFactor,
+        'حبات فردية متبقية': it.piecesCount,
+        'عدد الفواتير المطلوبة فيها': it.invoiceSources.length,
+        'تفصيل الفواتير المخدومة': invList,
+        'حالة المرحلة الأولى': it.pickedQty >= it.totalRequiredQty ? 'مكتمل الالتقاط' : it.pickedQty > 0 ? 'جاري الالتقاط' : 'معلق',
+        'العامل المسؤول': grp.assignedWorkerName || 'غير مسند'
+      });
+    });
+  });
+
+  const phase1Sheet = XLSX.utils.json_to_sheet(phase1Rows);
+  XLSX.utils.book_append_sheet(workbook, phase1Sheet, 'المرحلة 1 - التجميع الإجمالي');
+
+  // 2. Phase 2: Individual Invoices Preparation & Sorting (المرحلة الثانية: تفصيل وتحضير الفواتير المنفردة)
+  const phase2Rows: any[] = [];
+  // Build a map of invoice -> items
+  const invMap = new Map<string, {
+    invoiceNo: string;
+    orderNo?: string;
+    customerName?: string;
+    items: { itemCode: string; itemName: string; unit: string; systemUnit?: string; qty: number; groupName: string }[];
+  }>();
+
+  groupsToExport.forEach(grp => {
+    grp.items.forEach(it => {
+      it.invoiceSources.forEach(src => {
+        if (!invMap.has(src.invoiceNo)) {
+          invMap.set(src.invoiceNo, {
+            invoiceNo: src.invoiceNo,
+            orderNo: src.orderNo,
+            customerName: src.customerName,
+            items: []
+          });
+        }
+        invMap.get(src.invoiceNo)!.items.push({
+          itemCode: it.itemCode,
+          itemName: it.itemName,
+          unit: it.unit,
+          systemUnit: it.systemUnit,
+          qty: src.qty,
+          groupName: grp.groupName
+        });
+      });
+    });
+  });
+
+  invMap.forEach(invData => {
+    invData.items.forEach((item, i) => {
+      phase2Rows.push({
+        'رقم الفاتورة': invData.invoiceNo,
+        'رقم الطلب': invData.orderNo || '-',
+        'اسم العميل': invData.customerName || 'عميل تجزئة / مستودع',
+        'كود الصنف': item.itemCode,
+        'اسم الصنف': item.itemName,
+        'المجموعة': item.groupName,
+        'الوحدة': item.unit,
+        'الوحدة المعرفة للصرف': item.systemUnit || item.unit,
+        'الكمية المطلوبة لهذه الفاتورة': item.qty,
+        'حالة التجهيز والفرز': (wave.preparedInvoices || []).includes(invData.invoiceNo) ? 'تم التجهيز والفرز للفاتورة' : 'جاهز للفرز'
+      });
+    });
+  });
+
+  const phase2Sheet = XLSX.utils.json_to_sheet(phase2Rows);
+  XLSX.utils.book_append_sheet(workbook, phase2Sheet, 'المرحلة 2 - تحضير كل فاتورة');
+
+  // 3. Overview Summary Sheet
   const summaryRows = groupsToExport.map((grp, idx) => ({
     'رقم المجموعة': idx + 1,
     'اسم مجموعة المنتجات': grp.groupName,
@@ -1668,36 +1757,193 @@ export function exportPickingWaveToExcel(wave: BatchPickingWave, filterGroupId?:
   }));
 
   const summarySheet = XLSX.utils.json_to_sheet(summaryRows);
-  XLSX.utils.book_append_sheet(workbook, summarySheet, 'ملخص المجموعات والتجهيز');
-
-  // 2. Detailed Items per Group Sheet
-  for (const grp of groupsToExport) {
-    const detailRows = grp.items.map((it, i) => {
-      const invList = it.invoiceSources.map(s => `${s.invoiceNo} (${s.qty})`).join(' + ');
-      return {
-        'م': i + 1,
-        'كود الصنف / الباركود': it.itemCode,
-        'اسم الصنف': it.itemName,
-        'الموقع بالمستودع': it.location || '-',
-        'إجمالي الكمية المطلوبة': it.totalRequiredQty,
-        'الكمية المجهزة': it.pickedQty,
-        'عدد الكراتين': it.cartonsCount,
-        'معامل الكرتونة': it.cartonFactor,
-        'عدد الباكتات': it.packsCount,
-        'معامل الباكت': it.packFactor,
-        'حبات متبقية': it.piecesCount,
-        'تفصيل الفواتير والكميات': invList,
-        'حالة البند': it.status === 'COMPLETED' ? 'تم الالتقاط' : 'معلق',
-        'العامل المسؤول': grp.assignedWorkerName || 'غير محدد'
-      };
-    });
-
-    const safeSheetName = grp.groupName.slice(0, 28).replace(/[\\/?*[\]]/g, '_');
-    const groupSheet = XLSX.utils.json_to_sheet(detailRows);
-    XLSX.utils.book_append_sheet(workbook, groupSheet, safeSheetName);
-  }
+  XLSX.utils.book_append_sheet(workbook, summarySheet, 'ملخص المجموعات وإسناد العمال');
 
   XLSX.writeFile(workbook, `Picking_Wave_${wave.waveNo}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
+// ===================================================================
+// Packaging Group Rules Excel Template & Import / Export
+// ===================================================================
+
+/**
+ * Downloads a detailed Excel template for Packaging Rules (شروط ضم العبوات والأصناف المتشابهة)
+ */
+export function downloadPackagingRulesExcelTemplate(): void {
+  const sampleRules = [
+    {
+      'اسم_المجموعة': 'مجموعة المشروبات والعصائر 250 مل',
+      'من_بداية_كود_باركود': '6221000100',
+      'الى_نهاية_كود_باركود': '6221000999',
+      'الوحدة_المعرفة_على_السيستم': 'حبة',
+      'معامل_الكرتونة_البوكس': 24,
+      'معامل_الباكت_الشد': 6,
+      'اسم_الوحدة_الفردية': 'حبة',
+      'التصنيف': 'مشروبات',
+      'ملاحظات': 'تضم كافة عصائر الزجاج والعبوات الصغيرة'
+    },
+    {
+      'اسم_المجموعة': 'مجموعة المنظفات والمعقمات العائلية 1 لتر',
+      'من_بداية_كود_باركود': '6222000100',
+      'الى_نهاية_كود_باركود': '6222000999',
+      'الوحدة_المعرفة_على_السيستم': 'باكيت',
+      'معامل_الكرتونة_البوكس': 12,
+      'معامل_الباكت_الشد': 4,
+      'اسم_الوحدة_الفردية': 'عبوة',
+      'التصنيف': 'منظفات',
+      'ملاحظات': 'الصرف بوحدة الباكيت'
+    },
+    {
+      'اسم_المجموعة': 'مجموعة المعلبات والأغذية الجافة',
+      'من_بداية_كود_باركود': '8901234500',
+      'الى_نهاية_كود_باركود': '8901234599',
+      'الوحدة_المعرفة_على_السيستم': 'بوكس',
+      'معامل_الكرتونة_البوكس': 48,
+      'معامل_الباكت_الشد': 12,
+      'اسم_الوحدة_الفردية': 'علبة',
+      'التصنيف': 'أغذية',
+      'ملاحظات': 'علب التونة والبقوليات القياسية - الصرف بالبوكس'
+    }
+  ];
+
+  const worksheet = XLSX.utils.json_to_sheet(sampleRules);
+  worksheet['!cols'] = [
+    { wch: 32 }, // اسم المجموعة
+    { wch: 22 }, // من كود
+    { wch: 22 }, // إلى كود
+    { wch: 24 }, // الوحدة المعرفة
+    { wch: 20 }, // معامل الكرتونة
+    { wch: 18 }, // معامل الباكت
+    { wch: 18 }, // الوحدة الفردية
+    { wch: 18 }, // التصنيف
+    { wch: 40 }, // ملاحظات
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'شروط_تجميع_العبوات');
+  XLSX.writeFile(workbook, `Packaging_Rules_Template_${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
+/**
+ * Parses an uploaded Excel file for Packaging Rules
+ */
+export async function parsePackagingRulesExcel(file: File): Promise<{ rules: PackagingGroupRule[]; errors: string[] }> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+
+        if (!firstSheetName) {
+          return resolve({ rules: [], errors: ['الملف لا يحتوي على أي صفحات (Sheets).'] });
+        }
+
+        const worksheet = workbook.Sheets[firstSheetName];
+        const rawJson = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: '' });
+
+        if (!rawJson || rawJson.length === 0) {
+          return resolve({ rules: [], errors: ['ورقة العمل فارغة لا تحتوي على بيانات.'] });
+        }
+
+        const rules: PackagingGroupRule[] = [];
+        const errors: string[] = [];
+
+        rawJson.forEach((row, index) => {
+          // Normalize row keys
+          const normalized: Record<string, string> = {};
+          for (const key of Object.keys(row)) {
+            const cleanKey = key.trim().toLowerCase().replace(/[^a-z0-9\u0600-\u06FF]/g, '');
+            normalized[cleanKey] = String(row[key] ?? '').trim();
+          }
+
+          // Extract fields with multiple possible arabic / english headers
+          const name = normalized['اسم_المجموعة'] || normalized['اسمالمجموعة'] || normalized['groupname'] || normalized['name'] || `مجموعة مستوردة ${index + 1}`;
+          const startBarcode = normalized['من_بداية_كود_باركود'] || normalized['منبدايةكودباركود'] || normalized['بداية_الكود'] || normalized['بدايةالكود'] || normalized['startbarcode'] || normalized['startcode'] || normalized['fromcode'] || '';
+          const endBarcode = normalized['الى_نهاية_كود_باركود'] || normalized['الى_نهاية_كود'] || normalized['نهاية_الكود'] || normalized['نهايةالكود'] || normalized['endbarcode'] || normalized['endcode'] || normalized['tocode'] || startBarcode;
+          const systemUnit = normalized['الوحدة_المعرفة_على_السيستم'] || normalized['الوحدة_المعرفة'] || normalized['الوحدةالمعرفةعلىالسيستم'] || normalized['وحدة_الصرف'] || normalized['systemunit'] || normalized['issueunit'] || 'حبة';
+          const cartonFactor = parseInt(normalized['معامل_الكرتونة_البوكس'] || normalized['معاملالكرتونةالبوكس'] || normalized['معامل_الكرتون'] || normalized['الكرتون'] || normalized['cartonfactor'] || normalized['boxfactor'] || '24', 10) || 24;
+          const packFactor = parseInt(normalized['معامل_الباكت_الشد'] || normalized['معاملالباكتالشد'] || normalized['معامل_الباكت'] || normalized['الباكت'] || normalized['packfactor'] || normalized['shrinkfactor'] || '6', 10) || 6;
+          const unitName = normalized['اسم_الوحدة_الفردية'] || normalized['الوحدة_الفردية'] || normalized['اسم_الوحدة'] || normalized['الوحدة'] || normalized['unitname'] || normalized['unit'] || 'حبة';
+          const category = normalized['التصنيف'] || normalized['المجموعة'] || normalized['category'] || 'عام';
+          const notes = normalized['ملاحظات'] || normalized['notes'] || '';
+
+          if (!startBarcode) {
+            errors.push(`السطر ${index + 2}: لم يتم العثور على بداية كود/باركود للمجموعة.`);
+            return;
+          }
+
+          rules.push({
+            id: `grp-rule-${Date.now()}-${index}`,
+            name,
+            startBarcode,
+            endBarcode,
+            category,
+            cartonFactor,
+            packFactor,
+            unitName,
+            systemUnit,
+            baseUnit: unitName,
+            isActive: true,
+            notes,
+            createdAt: new Date().toISOString(),
+          });
+        });
+
+        resolve({ rules, errors });
+      } catch (err: any) {
+        resolve({ rules: [], errors: [`خطأ أثناء قراءة ملف الإكسيل: ${err.message || 'تنسيق غير صالح'}`] });
+      }
+    };
+
+    reader.onerror = () => resolve({ rules: [], errors: ['فشل في قراءة ملف الإكسيل.'] });
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+/**
+ * Exports current packaging rules to Excel
+ */
+export function exportPackagingRulesToExcel(rules: PackagingGroupRule[]): void {
+  if (!rules || rules.length === 0) {
+    alert('لا توجد شروط عبوات حالية للتصدير.');
+    return;
+  }
+
+  const exportRows = rules.map((r, idx) => ({
+    'م': idx + 1,
+    'اسم_المجموعة': r.name,
+    'من_بداية_كود_باركود': r.startBarcode,
+    'الى_نهاية_كود_باركود': r.endBarcode,
+    'الوحدة_المعرفة_على_السيستم': r.systemUnit || r.unitName || 'حبة',
+    'معامل_الكرتونة_البوكس': r.cartonFactor,
+    'معامل_الباكت_الشد': r.packFactor,
+    'اسم_الوحدة_الفردية': r.unitName,
+    'التصنيف': r.category || '-',
+    'الحالة': r.isActive ? 'مفعل نشط' : 'معطل',
+    'ملاحظات': r.notes || ''
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(exportRows);
+  worksheet['!cols'] = [
+    { wch: 6 },
+    { wch: 32 },
+    { wch: 22 },
+    { wch: 22 },
+    { wch: 24 },
+    { wch: 20 },
+    { wch: 18 },
+    { wch: 18 },
+    { wch: 18 },
+    { wch: 14 },
+    { wch: 40 }
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'شروط_تجميع_العبوات');
+  XLSX.writeFile(workbook, `Packaging_Rules_Export_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
 // Export All Picking Waves (كافة موجات وقوائم الانتقاء المجمعة)

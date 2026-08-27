@@ -13,6 +13,7 @@ import type {
   WarehouseWorker,
   BatchPickingWave,
   PickingProductGroup,
+  PackagingGroupRule,
   AggregatedPickingItem,
   WorkerExperienceLevel,
   GroupDifficultyLevel,
@@ -562,7 +563,7 @@ export async function saveAppSettings(settings: AppSettings): Promise<void> {
 // -------------------------------------------------------------------
 // Packaging Grouping Rules (قائمة شروط ضم المنتجات في مجموعات متشابهة)
 // -------------------------------------------------------------------
-export const DEFAULT_PACKAGING_RULES = [
+export const DEFAULT_PACKAGING_RULES: PackagingGroupRule[] = [
   {
     id: 'grp-rule-1',
     name: 'مجموعة المشروبات والعصائر (كرتون 24 / باكت 6)',
@@ -572,6 +573,8 @@ export const DEFAULT_PACKAGING_RULES = [
     cartonFactor: 24,
     packFactor: 6,
     unitName: 'حبة',
+    systemUnit: 'حبة',
+    baseUnit: 'حبة',
     isActive: true,
     notes: 'تضم كافة أحجام العصائر الصغيرة 250 مل',
     createdAt: new Date().toISOString(),
@@ -585,8 +588,10 @@ export const DEFAULT_PACKAGING_RULES = [
     cartonFactor: 12,
     packFactor: 4,
     unitName: 'عبوة',
+    systemUnit: 'باكيت',
+    baseUnit: 'عبوة',
     isActive: true,
-    notes: 'العبوات العائلية 1 لتر',
+    notes: 'العبوات العائلية 1 لتر - الصرف بوحدة الباكيت',
     createdAt: new Date().toISOString(),
   },
   {
@@ -598,21 +603,187 @@ export const DEFAULT_PACKAGING_RULES = [
     cartonFactor: 48,
     packFactor: 12,
     unitName: 'علبة',
+    systemUnit: 'بوكس',
+    baseUnit: 'علبة',
     isActive: true,
-    notes: 'علب التونة والبقوليات القياسية',
+    notes: 'علب التونة والبقوليات القياسية - الصرف بالبوكس',
     createdAt: new Date().toISOString(),
   }
 ];
 
-export async function getPackagingGroupRules(): Promise<any[]> {
+export async function getPackagingGroupRules(): Promise<PackagingGroupRule[]> {
   const db = await getDB();
   const rules = await db.get('key_value', 'packaging_group_rules');
-  return (rules as any[]) || DEFAULT_PACKAGING_RULES;
+  return (rules as PackagingGroupRule[]) || DEFAULT_PACKAGING_RULES;
 }
 
-export async function savePackagingGroupRules(rules: any[]): Promise<void> {
+export async function savePackagingGroupRules(rules: PackagingGroupRule[]): Promise<void> {
   const db = await getDB();
   await db.put('key_value', rules, 'packaging_group_rules');
+}
+
+/**
+ * Creates a 2-Phase Consolidated Picking Wave directly from all Master Invoices in DB
+ * Aggregates all SKU quantities across all invoices for the day (Phase 1)
+ * and attaches detailed invoice sources for individual preparation (Phase 2).
+ */
+export function createPickingWaveFromMasterItems(
+  items: MasterInvoiceItem[], 
+  rules: PackagingGroupRule[],
+  creatorName = 'مشرف التجهيز'
+): BatchPickingWave {
+  const invoiceSet = new Set<string>();
+  // Map keyed by itemCode to aggregate across all invoices
+  const itemMap = new Map<string, {
+    itemCode: string;
+    itemName: string;
+    unit: string;
+    totalRequiredQty: number;
+    sources: { invoiceNo: string; orderNo?: string; qty: number }[];
+  }>();
+
+  items.forEach(item => {
+    const inv = item.invoiceNo.trim();
+    invoiceSet.add(inv);
+    const code = item.itemCode.trim();
+    const qty = Number(item.requiredQty) || 0;
+
+    if (!itemMap.has(code)) {
+      itemMap.set(code, {
+        itemCode: code,
+        itemName: item.itemName.trim(),
+        unit: item.unit || 'PCS',
+        totalRequiredQty: qty,
+        sources: [{ invoiceNo: inv, orderNo: item.orderNo, qty }]
+      });
+    } else {
+      const existing = itemMap.get(code)!;
+      existing.totalRequiredQty += qty;
+      const src = existing.sources.find(s => s.invoiceNo === inv);
+      if (src) {
+        src.qty += qty;
+      } else {
+        existing.sources.push({ invoiceNo: inv, orderNo: item.orderNo, qty });
+      }
+    }
+  });
+
+  const groupMap = new Map<string, {
+    groupId: string;
+    groupName: string;
+    difficulty: 'HIGH_EXPERT' | 'MEDIUM_INTERMEDIATE' | 'LOW_NOVICE';
+    items: AggregatedPickingItem[];
+  }>();
+
+  let waveTotalQty = 0;
+  let waveTotalCartons = 0;
+  let waveTotalPacks = 0;
+  let waveTotalPieces = 0;
+
+  for (const itemData of itemMap.values()) {
+    const matchedRule = matchBarcodeToPackagingRule(itemData.itemCode, rules);
+    const cartonFactor = matchedRule?.cartonFactor || 24;
+    const packFactor = matchedRule?.packFactor || 6;
+    const systemUnit = matchedRule?.systemUnit || itemData.unit || 'حبة';
+
+    let gId = matchedRule ? matchedRule.id : 'general';
+    let gName = matchedRule ? matchedRule.name : 'مجموعة عامة (تجهيز قياسي)';
+    let difficulty: 'HIGH_EXPERT' | 'MEDIUM_INTERMEDIATE' | 'LOW_NOVICE' = 'MEDIUM_INTERMEDIATE';
+
+    const lower = (gName + ' ' + itemData.itemName).toLowerCase();
+    if (lower.includes('زجاج') || lower.includes('دواء') || lower.includes('حساس') || lower.includes('عطر') || lower.includes('كسر')) {
+      difficulty = 'HIGH_EXPERT';
+    } else if (lower.includes('كرتون') || lower.includes('سريع') || lower.includes('مناديل') || lower.includes('بلاستيك')) {
+      difficulty = 'LOW_NOVICE';
+    }
+
+    const totalQty = itemData.totalRequiredQty;
+    const cartonsCount = Math.floor(totalQty / cartonFactor);
+    const rem = totalQty % cartonFactor;
+    const packsCount = Math.floor(rem / packFactor);
+    const piecesCount = rem % packFactor;
+
+    waveTotalQty += totalQty;
+    waveTotalCartons += cartonsCount;
+    waveTotalPacks += packsCount;
+    waveTotalPieces += piecesCount;
+
+    const aggregatedItem: AggregatedPickingItem = {
+      id: `pick-item-${itemData.itemCode}-${Date.now()}`,
+      itemCode: itemData.itemCode,
+      itemName: itemData.itemName,
+      unit: itemData.unit,
+      systemUnit,
+      groupId: gId,
+      groupName: gName,
+      totalRequiredQty: totalQty,
+      pickedQty: 0,
+      cartonFactor,
+      packFactor,
+      cartonsCount,
+      packsCount,
+      piecesCount,
+      invoiceSources: itemData.sources,
+      status: 'PENDING',
+      location: 'ممر التخزين الرئيسي',
+    };
+
+    if (!groupMap.has(gId)) {
+      groupMap.set(gId, {
+        groupId: gId,
+        groupName: gName,
+        difficulty,
+        items: [aggregatedItem]
+      });
+    } else {
+      groupMap.get(gId)!.items.push(aggregatedItem);
+      if (difficulty === 'HIGH_EXPERT') {
+        groupMap.get(gId)!.difficulty = 'HIGH_EXPERT';
+      }
+    }
+  }
+
+  const groups: PickingProductGroup[] = Array.from(groupMap.values()).map(g => {
+    const groupQty = g.items.reduce((sum, it) => sum + it.totalRequiredQty, 0);
+    const groupCartons = g.items.reduce((sum, it) => sum + it.cartonsCount, 0);
+    const groupPacks = g.items.reduce((sum, it) => sum + it.packsCount, 0);
+    const groupPieces = g.items.reduce((sum, it) => sum + it.piecesCount, 0);
+    
+    const grpInvoices = new Set<string>();
+    g.items.forEach(it => it.invoiceSources.forEach(s => grpInvoices.add(s.invoiceNo)));
+
+    return {
+      groupId: g.groupId,
+      groupName: g.groupName,
+      difficulty: g.difficulty,
+      items: g.items,
+      totalQty: groupQty,
+      totalCartons: groupCartons,
+      totalPacks: groupPacks,
+      totalPieces: groupPieces,
+      invoicesCount: grpInvoices.size,
+      status: 'PENDING'
+    };
+  });
+
+  return {
+    id: `wave-${Date.now()}`,
+    waveNo: `WAVE-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+    title: `قائمة انتقاء مجمعة لطلبات اليوم (${invoiceSet.size} فواتير - ${itemMap.size} صنف)`,
+    createdAt: new Date().toISOString(),
+    createdBy: creatorName,
+    totalInvoicesCount: invoiceSet.size,
+    invoiceNumbers: Array.from(invoiceSet),
+    totalItemsCount: itemMap.size,
+    totalQuantity: waveTotalQty,
+    totalCartons: waveTotalCartons,
+    totalPacks: waveTotalPacks,
+    totalPieces: waveTotalPieces,
+    groups,
+    status: 'DRAFT',
+    phase1Completed: false,
+    preparedInvoices: []
+  };
 }
 
 /**

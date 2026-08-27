@@ -65,7 +65,9 @@ import {
   savePickingWave, 
   deletePickingWave,
   getPackagingGroupRules,
-  matchBarcodeToPackagingRule
+  matchBarcodeToPackagingRule,
+  getAllMasterItems,
+  createPickingWaveFromMasterItems
 } from '../services/db';
 import { SoundEffects } from '../services/audio';
 import { PackagingRulesModal } from './PackagingRulesModal';
@@ -90,6 +92,9 @@ export const PickingWaveScreen: React.FC<PickingWaveScreenProps> = ({
 
   // Active Wave State
   const [activeWave, setActiveWave] = useState<BatchPickingWave | null>(null);
+  const [activeWavePhase, setActiveWavePhase] = useState<'PHASE_1_TOTALS' | 'PHASE_2_INVOICES'>('PHASE_1_TOTALS');
+  const [phase2SearchInvoice, setPhase2SearchInvoice] = useState<string>('');
+  const [expandedInvoiceNos, setExpandedInvoiceNos] = useState<Set<string>>(new Set());
   const [workers, setWorkers] = useState<WarehouseWorker[]>([]);
   const [packagingRules, setPackagingRules] = useState<PackagingGroupRule[]>([]);
   const [savedWaves, setSavedWaves] = useState<BatchPickingWave[]>([]);
@@ -391,6 +396,110 @@ export const PickingWaveScreen: React.FC<PickingWaveScreenProps> = ({
     setActiveWave(updated);
     await savePickingWave(updated);
     showNotice(isRtl ? '✅ تم إعادة الإسناد الذكي للعمال بنجاح' : '✅ Smart Worker Assignment Applied', 'SUCCESS');
+  };
+
+  // Generate Picking Wave directly from all Master Invoices in DB
+  const handleGenerateFromMasterItems = async () => {
+    try {
+      setIsUploading(true);
+      const allMaster = await getAllMasterItems();
+      if (!allMaster || allMaster.length === 0) {
+        showNotice(
+          isRtl 
+            ? '⚠️ لا توجد فواتير أو بنود مسجلة حالياً في قاعدة البيانات لتوليد قائمة الانتقاء المجمعة. يرجى استيراد الفواتير أولاً.' 
+            : 'No invoices found in database to generate picking wave.', 
+          'WARNING'
+        );
+        return;
+      }
+
+      const generated = createPickingWaveFromMasterItems(
+        allMaster,
+        packagingRules,
+        `قائمة انتقاء مجمعة لطلبات اليوم (${new Date().toLocaleDateString('ar-EG')})`
+      );
+
+      const assignedWave = performSmartWorkerAssignment(generated, workers);
+      setActiveWave(assignedWave);
+      setActiveWavePhase('PHASE_1_TOTALS');
+      await savePickingWave(assignedWave);
+      const updatedList = await getAllPickingWaves();
+      setSavedWaves(updatedList);
+
+      if (settings.soundEnabled) SoundEffects.playInvoiceLock(settings.soundVolume);
+      showNotice(
+        isRtl 
+          ? `🎉 تم تجميع ${generated.totalQuantity} قطعة من ${generated.totalInvoicesCount} فاتورة كدفعة واحدة لطلبات اليوم!` 
+          : `Generated wave for ${generated.totalQuantity} items from ${generated.totalInvoicesCount} invoices!`,
+        'SUCCESS'
+      );
+    } catch (err: any) {
+      console.error('Error generating wave from master items:', err);
+      showNotice(err.message || 'حدث خطأ أثناء توليد قائمة الانتقاء', 'WARNING');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Phase 1 to Phase 2 Completion Toggle
+  const handleTogglePhase1Completed = async () => {
+    if (!activeWave) return;
+    const newStatus = !activeWave.phase1Completed;
+    const updated: BatchPickingWave = {
+      ...activeWave,
+      phase1Completed: newStatus,
+    };
+    setActiveWave(updated);
+    await savePickingWave(updated);
+    if (newStatus) {
+      setActiveWavePhase('PHASE_2_INVOICES');
+      if (settings.soundEnabled) SoundEffects.playInvoiceLock(settings.soundVolume);
+      showNotice(
+        isRtl 
+          ? '🎉 تم تأكيد اكتمال المرحلة الأولى (التجميع الإجمالي). تم الانتقال للمرحلة الثانية: تحضير وفرز الفواتير.' 
+          : 'Phase 1 marked completed! Switched to Phase 2 (Invoice Preparation).',
+        'SUCCESS'
+      );
+    } else {
+      showNotice(isRtl ? 'تم إلغاء قفل المرحلة الأولى' : 'Phase 1 unlocked', 'INFO');
+    }
+  };
+
+  // Phase 2: Toggle invoice prepared status
+  const handleToggleInvoicePrepared = async (invoiceNo: string) => {
+    if (!activeWave) return;
+    const currentPrepared = activeWave.preparedInvoices || [];
+    const isPrepared = currentPrepared.includes(invoiceNo);
+    const updatedPrepared = isPrepared 
+      ? currentPrepared.filter(inv => inv !== invoiceNo)
+      : [...currentPrepared, invoiceNo];
+
+    const updatedWave: BatchPickingWave = {
+      ...activeWave,
+      preparedInvoices: updatedPrepared,
+    };
+
+    setActiveWave(updatedWave);
+    await savePickingWave(updatedWave);
+    if (settings.soundEnabled) SoundEffects.playScanMatch(settings.soundVolume);
+    showNotice(
+      !isPrepared 
+        ? (isRtl ? `✅ تم تأكيد تحضير وفرز الفاتورة #${invoiceNo} بنجاح` : `Invoice #${invoiceNo} marked as prepared`)
+        : (isRtl ? `تم إلغاء تأكيد الفاتورة #${invoiceNo}` : `Invoice #${invoiceNo} unmarked`),
+      'SUCCESS'
+    );
+  };
+
+  const handleToggleInvoiceExpand = (invoiceNo: string) => {
+    setExpandedInvoiceNos(prev => {
+      const next = new Set(prev);
+      if (next.has(invoiceNo)) {
+        next.delete(invoiceNo);
+      } else {
+        next.add(invoiceNo);
+      }
+      return next;
+    });
   };
 
   // Manual worker change for a specific group
@@ -902,6 +1011,16 @@ export const PickingWaveScreen: React.FC<PickingWaveScreenProps> = ({
             )}
 
             <button
+              onClick={handleGenerateFromMasterItems}
+              disabled={isUploading}
+              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all shadow-md active:scale-95 ring-1 ring-purple-400"
+              title={isRtl ? 'توليد وتجميع كميات الصنف من كافة فواتير اليوم المسجلة في النظام' : 'Generate Consolidated Wave from Database Invoices'}
+            >
+              <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
+              <span>{isRtl ? '⚡ تجميع طلبات اليوم (من الفواتير)' : 'Auto-Generate Wave'}</span>
+            </button>
+
+            <button
               onClick={() => exportAllPickingWavesToExcel(savedWaves)}
               className="bg-emerald-700/80 hover:bg-emerald-600 text-white border border-emerald-500/50 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm"
               title={isRtl ? 'تصدير كافة موجات وقوائم الانتقاء المجمعة إلى إكسيل' : 'Export All Waves to Excel'}
@@ -1096,684 +1215,1082 @@ export const PickingWaveScreen: React.FC<PickingWaveScreenProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* TAB 1: WAVE PICKING GROUPS & PACKAGING BREAKDOWN VIEW                     */}
+      {/* TAB 1: WAVE PICKING GROUPS & PACKAGING BREAKDOWN VIEW (2-PHASE WORKFLOW)   */}
       {/* ========================================================================= */}
       {activeSubTab === 'wave' && (
         <div className="space-y-4">
           {activeWave ? (
             <>
-              {/* Manual Edit Mode Status Banner */}
-              <div className={`p-3 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md transition-all ${
-                isManualEditMode 
-                  ? 'bg-emerald-950/50 border-emerald-700/80 text-emerald-100' 
-                  : 'bg-slate-900/90 border-slate-800 text-slate-300'
-              }`}>
-                <div className="flex items-center gap-2.5">
-                  <div className={`p-2 rounded-xl border ${
-                    isManualEditMode 
-                      ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-300' 
-                      : 'bg-slate-800 border-slate-700 text-slate-400'
+              {/* 2-Phase Mode Navigation Switcher */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-1.5 bg-slate-950/90 border border-slate-800 rounded-2xl shadow-md">
+                <button
+                  type="button"
+                  onClick={() => setActiveWavePhase('PHASE_1_TOTALS')}
+                  className={`p-3.5 rounded-xl text-right transition-all flex items-start gap-3 border ${
+                    activeWavePhase === 'PHASE_1_TOTALS'
+                      ? 'bg-gradient-to-r from-indigo-950/90 via-slate-900 to-slate-900 border-indigo-500 text-white shadow-lg ring-1 ring-indigo-500/50'
+                      : 'bg-slate-900/40 border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                  }`}
+                >
+                  <div className={`p-2.5 rounded-xl border shrink-0 ${
+                    activeWavePhase === 'PHASE_1_TOTALS' 
+                      ? 'bg-indigo-600 text-white border-indigo-400 shadow-md' 
+                      : 'bg-slate-800 text-slate-400 border-slate-700'
                   }`}>
-                    {isManualEditMode ? <Edit3 className="w-4 h-4 animate-bounce" /> : <Lock className="w-4 h-4" />}
+                    <Layers className="w-5 h-5" />
                   </div>
-                  <div>
-                    <div className="text-xs font-black flex items-center gap-2">
-                      <span>
-                        {isRtl 
-                          ? (isManualEditMode ? '✍️ وضع التعديل اليدوي والمراجعة الدقيقة مفعّل حالياً' : '🔒 وضع القراءة والمسح المباشر (الحقول محمية من التعديل العفوي)')
-                          : (isManualEditMode ? 'Manual Quantity & Worker Edit Mode is Active' : 'Protected Read-Only & Direct Scanning Mode Active')}
+                  <div className="space-y-1 flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-indigo-300">
+                        {isRtl ? 'المرحلة الأولى (1)' : 'Phase 1'}
                       </span>
+                      {activeWave.phase1Completed ? (
+                        <span className="text-[10px] px-2 py-0.5 bg-emerald-950 text-emerald-300 border border-emerald-800 rounded-full font-bold flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span>{isRtl ? 'مكتملة' : 'Completed'}</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-2 py-0.5 bg-indigo-500/20 text-indigo-300 rounded-full font-bold">
+                          {isRtl ? 'تجميع إجمالي' : 'Consolidated Total'}
+                        </span>
+                      )}
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      {isRtl
-                        ? (isManualEditMode 
-                            ? 'يمكنك الآن تعديل الكميات الإجمالية، تفكيك العبوات (كراتين/باكتات/حبات)، وتغيير العامل المسند لكل مجموعة قبل قفل المهمة واستخراج التقارير.'
-                            : 'تم قفل حقول الإدخال اليدوي لمنع التعديلات الخاطئة أثناء المسح. انقر على زر [التعديل اليدوي] أعلاه إذا رغبت بالمراجعة والتعديل.')
-                        : (isManualEditMode
-                            ? 'You can now manually adjust quantities, adjust carton/pack counts, and reassign workers before final report extraction.'
-                            : 'Input fields are locked to prevent accidental modifications during scanning. Toggle Manual Edit to make changes.')}
+                    <h3 className="text-sm font-bold text-white">
+                      {isRtl ? 'قائمة الكميات الإجمالية لطلبات اليوم' : 'Total Consolidated Daily Picking'}
+                    </h3>
+                    <p className="text-[11px] text-slate-400">
+                      {isRtl 
+                        ? 'تجميع كميات كل صنف من كافة الفواتير واحتساب العبوات والصرف بالوحدة المعرفة' 
+                        : 'Aggregate all invoice quantities by item code & compute packaging units'}
                     </p>
                   </div>
-                </div>
+                </button>
 
-                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                  <button
-                    onClick={() => setIsPreReportAuditModalOpen(true)}
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow transition-all flex items-center gap-1.5"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>{isRtl ? 'فحص ومراجعة التقرير' : 'Audit Report'}</span>
-                  </button>
-                </div>
-              </div>
-              {/* Wave Summary Dashboard Cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 shadow-md">
-                  <div className="text-[11px] text-slate-400 font-bold mb-1 flex items-center gap-1">
-                    <FileText className="w-3.5 h-3.5 text-blue-400" />
-                    <span>{isRtl ? 'الفواتير المخدومة' : 'Total Invoices'}</span>
+                <button
+                  type="button"
+                  onClick={() => setActiveWavePhase('PHASE_2_INVOICES')}
+                  className={`p-3.5 rounded-xl text-right transition-all flex items-start gap-3 border ${
+                    activeWavePhase === 'PHASE_2_INVOICES'
+                      ? 'bg-gradient-to-r from-purple-950/90 via-slate-900 to-slate-900 border-purple-500 text-white shadow-lg ring-1 ring-purple-500/50'
+                      : 'bg-slate-900/40 border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                  }`}
+                >
+                  <div className={`p-2.5 rounded-xl border shrink-0 ${
+                    activeWavePhase === 'PHASE_2_INVOICES' 
+                      ? 'bg-purple-600 text-white border-purple-400 shadow-md' 
+                      : 'bg-slate-800 text-slate-400 border-slate-700'
+                  }`}>
+                    <FileText className="w-5 h-5" />
                   </div>
-                  <div className="text-lg font-black text-blue-300 font-mono">
-                    {activeWave.totalInvoicesCount} <span className="text-xs font-normal text-slate-400">{isRtl ? 'فاتورة' : 'Invoices'}</span>
+                  <div className="space-y-1 flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-purple-300">
+                        {isRtl ? 'المرحلة الثانية (2)' : 'Phase 2'}
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 bg-purple-500/20 text-purple-300 rounded-full font-bold">
+                        {(activeWave.preparedInvoices || []).length} / {activeWave.totalInvoicesCount} {isRtl ? 'فواتير جاهزة' : 'Invoices Ready'}
+                      </span>
+                    </div>
+                    <h3 className="text-sm font-bold text-white">
+                      {isRtl ? 'تحضير وفرز كمية كل فاتورة منفردة' : 'Individual Invoices Preparation & Sorting'}
+                    </h3>
+                    <p className="text-[11px] text-slate-400">
+                      {isRtl 
+                        ? 'توزيع الأصناف الملتقطة وتجهيز كل فاتورة لعميلها ومطابقة البنود والتغليف' 
+                        : 'Sort picked stock into individual customer invoices & verify completeness'}
+                    </p>
                   </div>
-                </div>
-
-                <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 shadow-md">
-                  <div className="text-[11px] text-slate-400 font-bold mb-1 flex items-center gap-1">
-                    <ListFilter className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>{isRtl ? 'الأصناف المجمعة' : 'Unique Items'}</span>
-                  </div>
-                  <div className="text-lg font-black text-emerald-300 font-mono">
-                    {activeWave.totalItemsCount} <span className="text-xs font-normal text-slate-400">{isRtl ? 'كود صنف' : 'Codes'}</span>
-                  </div>
-                </div>
-
-                <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 shadow-md">
-                  <div className="text-[11px] text-slate-400 font-bold mb-1 flex items-center gap-1">
-                    <Boxes className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>{isRtl ? 'إجمالي الكمية' : 'Total Pieces'}</span>
-                  </div>
-                  <div className="text-lg font-black text-indigo-300 font-mono">
-                    {activeWave.totalQuantity} <span className="text-xs font-normal text-slate-400">{isRtl ? 'حبة' : 'Pcs'}</span>
-                  </div>
-                </div>
-
-                <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 shadow-md">
-                  <div className="text-[11px] text-slate-400 font-bold mb-1 flex items-center gap-1">
-                    <Layers className="w-3.5 h-3.5 text-amber-400" />
-                    <span>{isRtl ? 'إجمالي الكراتين' : 'Master Cartons'}</span>
-                  </div>
-                  <div className="text-lg font-black text-amber-300 font-mono">
-                    {activeWave.totalCartons} <span className="text-xs font-normal text-slate-400">{isRtl ? 'كرتونة' : 'Ctn'}</span>
-                  </div>
-                </div>
-
-                <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 shadow-md">
-                  <div className="text-[11px] text-slate-400 font-bold mb-1 flex items-center gap-1">
-                    <Boxes className="w-3.5 h-3.5 text-purple-400" />
-                    <span>{isRtl ? 'إجمالي الباكتات' : 'Shrink Packs'}</span>
-                  </div>
-                  <div className="text-lg font-black text-purple-300 font-mono">
-                    {activeWave.totalPacks} <span className="text-xs font-normal text-slate-400">{isRtl ? 'باكت' : 'Packs'}</span>
-                  </div>
-                </div>
-
-                <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 shadow-md">
-                  <div className="text-[11px] text-slate-400 font-bold mb-1 flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>{isRtl ? 'حبات فردية' : 'Loose Pieces'}</span>
-                  </div>
-                  <div className="text-lg font-black text-emerald-300 font-mono">
-                    {activeWave.totalPieces} <span className="text-xs font-normal text-slate-400">{isRtl ? 'حبة' : 'Pcs'}</span>
-                  </div>
-                </div>
+                </button>
               </div>
 
-              {/* Column Locking Toolbar & Filters */}
-              <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-bold text-slate-300 flex items-center gap-1">
-                    <Pin className="w-3.5 h-3.5 text-amber-400" />
-                    <span>تثبيت عمود التسجيل باللمس:</span>
-                  </span>
+              {/* ----------------------------------------------------------------- */}
+              {/* PHASE 1 VIEW: CONSOLIDATED TOTALS BY GROUP & SYSTEM UNIT          */}
+              {/* ----------------------------------------------------------------- */}
+              {activeWavePhase === 'PHASE_1_TOTALS' && (
+                <div className="space-y-4">
+                  {/* Manual Edit Mode Status Banner */}
+                  <div className={`p-3 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md transition-all ${
+                    isManualEditMode 
+                      ? 'bg-emerald-950/50 border-emerald-700/80 text-emerald-100' 
+                      : 'bg-slate-900/90 border-slate-800 text-slate-300'
+                  }`}>
+                    <div className="flex items-center gap-2.5">
+                      <div className={`p-2 rounded-xl border ${
+                        isManualEditMode 
+                          ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-300' 
+                          : 'bg-slate-800 border-slate-700 text-slate-400'
+                      }`}>
+                        {isManualEditMode ? <Edit3 className="w-4 h-4 animate-bounce" /> : <Lock className="w-4 h-4" />}
+                      </div>
+                      <div>
+                        <div className="text-xs font-black flex items-center gap-2">
+                          <span>
+                            {isRtl 
+                              ? (isManualEditMode ? '✍️ وضع التعديل اليدوي والمراجعة الدقيقة مفعّل حالياً' : '🔒 وضع القراءة والمسح المباشر (الحقول محمية من التعديل العفوي)')
+                              : (isManualEditMode ? 'Manual Quantity & Worker Edit Mode is Active' : 'Protected Read-Only & Direct Scanning Mode Active')}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          {isRtl
+                            ? (isManualEditMode 
+                                ? 'يمكنك الآن تعديل الكميات الإجمالية، تفكيك العبوات (كراتين/باكتات/حبات)، وتغيير العامل المسند لكل مجموعة قبل قفل المهمة واستخراج التقارير.'
+                                : 'تم قفل حقول الإدخال اليدوي لمنع التعديلات الخاطئة أثناء المسح. انقر على زر [التعديل اليدوي] أعلاه إذا رغبت بالمراجعة والتعديل.')
+                            : (isManualEditMode
+                                ? 'You can now manually adjust quantities, adjust carton/pack counts, and reassign workers before final report extraction.'
+                                : 'Input fields are locked to prevent accidental modifications during scanning. Toggle Manual Edit to make changes.')}
+                        </p>
+                      </div>
+                    </div>
 
-                  <div className="inline-flex bg-slate-950 p-1 rounded-lg border border-slate-800 gap-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveTargetColumn('cartons');
-                        if (settings.soundEnabled) SoundEffects.playScanMatch(settings.soundVolume);
-                      }}
-                      className={`px-2.5 py-1 text-xs font-bold rounded transition-all flex items-center gap-1 ${
-                        activeTargetColumn === 'cartons'
-                          ? 'bg-amber-500 text-black shadow font-black'
-                          : 'text-amber-300/70 hover:text-amber-300 hover:bg-slate-800'
-                      }`}
-                    >
-                      {activeTargetColumn === 'cartons' && <Pin className="w-3 h-3" />}
-                      <span>الكراتين</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveTargetColumn('packs');
-                        if (settings.soundEnabled) SoundEffects.playScanMatch(settings.soundVolume);
-                      }}
-                      className={`px-2.5 py-1 text-xs font-bold rounded transition-all flex items-center gap-1 ${
-                        activeTargetColumn === 'packs'
-                          ? 'bg-purple-600 text-white shadow font-black'
-                          : 'text-purple-300/70 hover:text-purple-300 hover:bg-slate-800'
-                      }`}
-                    >
-                      {activeTargetColumn === 'packs' && <Pin className="w-3 h-3" />}
-                      <span>الباكتات</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveTargetColumn('pieces');
-                        if (settings.soundEnabled) SoundEffects.playScanMatch(settings.soundVolume);
-                      }}
-                      className={`px-2.5 py-1 text-xs font-bold rounded transition-all flex items-center gap-1 ${
-                        activeTargetColumn === 'pieces'
-                          ? 'bg-blue-600 text-white shadow font-black'
-                          : 'text-blue-300/70 hover:text-blue-300 hover:bg-slate-800'
-                      }`}
-                    >
-                      {activeTargetColumn === 'pieces' && <Pin className="w-3 h-3" />}
-                      <span>حبات فردية</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1 sm:w-60">
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5 rtl:left-auto rtl:right-2.5" />
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder={isRtl ? 'بحث في أصناف الموجة...' : 'Search items...'}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-2.5 rtl:pl-2.5 rtl:pr-8 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-
-                  <select
-                    value={selectedGroupFilter}
-                    onChange={(e) => setSelectedGroupFilter(e.target.value)}
-                    className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none cursor-pointer"
-                  >
-                    <option value="ALL">{isRtl ? 'كافة المجموعات' : 'All Groups'}</option>
-                    {activeWave.groups.map(g => (
-                      <option key={g.groupId} value={g.groupId}>{g.groupName}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Product Groups & Items List */}
-              <div className="space-y-4">
-                {filteredGroups.length === 0 ? (
-                  <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-8 text-center">
-                    <Boxes className="w-12 h-12 text-slate-600 mx-auto mb-2" />
-                    <p className="text-sm text-slate-400">{isRtl ? 'لا توجد مجموعات تطابق البحث المحدد' : 'No matching product groups found'}</p>
-                  </div>
-                ) : (
-                  filteredGroups.map((group, groupIdx) => {
-                    const assignedWorker = workers.find(w => w.id === group.assignedWorkerId);
-                    const isGroupCompleted = group.items.every(i => i.status === 'COMPLETED');
-                    const pickedItemsCount = group.items.filter(i => i.status === 'COMPLETED').length;
-                    const completionPercent = group.items.length > 0 ? Math.round((pickedItemsCount / group.items.length) * 100) : 0;
-
-                    return (
-                      <div
-                        key={group.groupId}
-                        className="bg-slate-900/90 border border-slate-800 rounded-2xl shadow-xl overflow-hidden transition-all"
+                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                      <button
+                        onClick={() => setIsPreReportAuditModalOpen(true)}
+                        className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow transition-all flex items-center gap-1.5"
                       >
-                        {/* Group Header Card */}
-                        <div className={`p-4 border-b flex flex-col lg:flex-row lg:items-center justify-between gap-3 ${
-                          group.difficulty === 'HIGH_EXPERT'
-                            ? 'bg-gradient-to-r from-red-950/40 via-slate-900 to-slate-900 border-red-900/40'
-                            : group.difficulty === 'MEDIUM_INTERMEDIATE'
-                            ? 'bg-gradient-to-r from-amber-950/40 via-slate-900 to-slate-900 border-amber-900/40'
-                            : 'bg-gradient-to-r from-emerald-950/40 via-slate-900 to-slate-900 border-emerald-900/40'
-                        }`}>
-                          <div className="space-y-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="bg-slate-800 text-indigo-300 font-mono text-xs px-2 py-0.5 rounded-md font-bold">
-                                #{groupIdx + 1}
-                              </span>
-                              <h2 className="text-base font-black text-white">{group.groupName}</h2>
-                              {getDifficultyBadge(group.difficulty)}
-                            </div>
-                            <p className="text-xs text-slate-400 flex items-center gap-3">
-                              <span>{isRtl ? 'عدد الأصناف:' : 'Items:'} <strong className="text-white">{group.items.length}</strong></span>
-                              <span>•</span>
-                              <span>{isRtl ? 'الفواتير المخدومة:' : 'Invoices:'} <strong className="text-white">{group.invoicesCount}</strong></span>
-                              <span>•</span>
-                              <span>{isRtl ? 'نسبة الإنجاز:' : 'Progress:'} <strong className={completionPercent === 100 ? 'text-emerald-400' : 'text-amber-400'}>{completionPercent}%</strong></span>
-                            </p>
-                          </div>
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        <span>{isRtl ? 'فحص ومراجعة التقرير' : 'Audit Report'}</span>
+                      </button>
+                    </div>
+                  </div>
 
-                          {/* Worker Assignment & Actions */}
-                          <div className="flex flex-wrap items-center gap-2.5">
-                            {/* Worker Selector Dropdown */}
-                            <div className="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 rounded-xl px-2.5 py-1.5">
-                              <UserCheck className="w-4 h-4 text-indigo-400" />
-                              <div className="flex flex-col">
-                                <span className="text-[10px] text-slate-400 font-bold">{isRtl ? 'العامل المسند:' : 'Assigned Worker:'}</span>
-                                <select
-                                  value={group.assignedWorkerId || ''}
-                                  onChange={(e) => handleAssignWorkerToGroup(group.groupId, e.target.value)}
-                                  className="bg-transparent text-xs font-bold text-slate-100 focus:outline-none cursor-pointer"
-                                >
-                                  <option value="" className="bg-slate-900 text-slate-400">
-                                    {isRtl ? '-- حدد عامل للتجهيز --' : '-- Assign Worker --'}
-                                  </option>
-                                  {workers.map(w => (
-                                    <option key={w.id} value={w.id} className="bg-slate-900 text-slate-100">
-                                      {w.name} ({w.code} - {w.experienceLevel === 'EXPERT' ? 'خبير' : w.experienceLevel === 'INTERMEDIATE' ? 'متوسط' : 'مبتدئ'})
-                                    </option>
-                                  ))}
-                                </select>
+                  {/* Wave Summary Dashboard Cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 shadow-md">
+                      <div className="text-[11px] text-slate-400 font-bold mb-1 flex items-center gap-1">
+                        <FileText className="w-3.5 h-3.5 text-blue-400" />
+                        <span>{isRtl ? 'الفواتير المخدومة' : 'Total Invoices'}</span>
+                      </div>
+                      <div className="text-lg font-black text-blue-300 font-mono">
+                        {activeWave.totalInvoicesCount} <span className="text-xs font-normal text-slate-400">{isRtl ? 'فاتورة' : 'Invoices'}</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 shadow-md">
+                      <div className="text-[11px] text-slate-400 font-bold mb-1 flex items-center gap-1">
+                        <ListFilter className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>{isRtl ? 'الأصناف المجمعة' : 'Unique Items'}</span>
+                      </div>
+                      <div className="text-lg font-black text-emerald-300 font-mono">
+                        {activeWave.totalItemsCount} <span className="text-xs font-normal text-slate-400">{isRtl ? 'كود صنف' : 'Codes'}</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 shadow-md">
+                      <div className="text-[11px] text-slate-400 font-bold mb-1 flex items-center gap-1">
+                        <Boxes className="w-3.5 h-3.5 text-indigo-400" />
+                        <span>{isRtl ? 'إجمالي الكمية' : 'Total Pieces'}</span>
+                      </div>
+                      <div className="text-lg font-black text-indigo-300 font-mono">
+                        {activeWave.totalQuantity} <span className="text-xs font-normal text-slate-400">{isRtl ? 'حبة' : 'Pcs'}</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 shadow-md">
+                      <div className="text-[11px] text-slate-400 font-bold mb-1 flex items-center gap-1">
+                        <Layers className="w-3.5 h-3.5 text-amber-400" />
+                        <span>{isRtl ? 'إجمالي الكراتين' : 'Master Cartons'}</span>
+                      </div>
+                      <div className="text-lg font-black text-amber-300 font-mono">
+                        {activeWave.totalCartons} <span className="text-xs font-normal text-slate-400">{isRtl ? 'كرتونة' : 'Ctn'}</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 shadow-md">
+                      <div className="text-[11px] text-slate-400 font-bold mb-1 flex items-center gap-1">
+                        <Boxes className="w-3.5 h-3.5 text-purple-400" />
+                        <span>{isRtl ? 'إجمالي الباكتات' : 'Shrink Packs'}</span>
+                      </div>
+                      <div className="text-lg font-black text-purple-300 font-mono">
+                        {activeWave.totalPacks} <span className="text-xs font-normal text-slate-400">{isRtl ? 'باكت' : 'Packs'}</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 shadow-md">
+                      <div className="text-[11px] text-slate-400 font-bold mb-1 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>{isRtl ? 'حبات فردية' : 'Loose Pieces'}</span>
+                      </div>
+                      <div className="text-lg font-black text-emerald-300 font-mono">
+                        {activeWave.totalPieces} <span className="text-xs font-normal text-slate-400">{isRtl ? 'حبة' : 'Pcs'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Column Locking Toolbar & Filters */}
+                  <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-bold text-slate-300 flex items-center gap-1">
+                        <Pin className="w-3.5 h-3.5 text-amber-400" />
+                        <span>{isRtl ? 'تثبيت عمود التسجيل باللمس:' : 'Lock Column:'}</span>
+                      </span>
+
+                      <div className="inline-flex bg-slate-950 p-1 rounded-lg border border-slate-800 gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTargetColumn('cartons');
+                            if (settings.soundEnabled) SoundEffects.playScanMatch(settings.soundVolume);
+                          }}
+                          className={`px-2.5 py-1 text-xs font-bold rounded transition-all flex items-center gap-1 ${
+                            activeTargetColumn === 'cartons'
+                              ? 'bg-amber-500 text-black shadow font-black'
+                              : 'text-amber-300/70 hover:text-amber-300 hover:bg-slate-800'
+                          }`}
+                        >
+                          {activeTargetColumn === 'cartons' && <Pin className="w-3 h-3" />}
+                          <span>{isRtl ? 'الكراتين' : 'Cartons'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTargetColumn('packs');
+                            if (settings.soundEnabled) SoundEffects.playScanMatch(settings.soundVolume);
+                          }}
+                          className={`px-2.5 py-1 text-xs font-bold rounded transition-all flex items-center gap-1 ${
+                            activeTargetColumn === 'packs'
+                              ? 'bg-purple-600 text-white shadow font-black'
+                              : 'text-purple-300/70 hover:text-purple-300 hover:bg-slate-800'
+                          }`}
+                        >
+                          {activeTargetColumn === 'packs' && <Pin className="w-3 h-3" />}
+                          <span>{isRtl ? 'الباكتات' : 'Packs'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTargetColumn('pieces');
+                            if (settings.soundEnabled) SoundEffects.playScanMatch(settings.soundVolume);
+                          }}
+                          className={`px-2.5 py-1 text-xs font-bold rounded transition-all flex items-center gap-1 ${
+                            activeTargetColumn === 'pieces'
+                              ? 'bg-blue-600 text-white shadow font-black'
+                              : 'text-blue-300/70 hover:text-blue-300 hover:bg-slate-800'
+                          }`}
+                        >
+                          {activeTargetColumn === 'pieces' && <Pin className="w-3 h-3" />}
+                          <span>{isRtl ? 'حبات فردية' : 'Loose Pieces'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1 sm:w-60">
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5 rtl:left-auto rtl:right-2.5" />
+                        <input
+                          type="text"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder={isRtl ? 'بحث في أصناف الموجة...' : 'Search items...'}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-2.5 rtl:pl-2.5 rtl:pr-8 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+
+                      <select
+                        value={selectedGroupFilter}
+                        onChange={(e) => setSelectedGroupFilter(e.target.value)}
+                        className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none cursor-pointer"
+                      >
+                        <option value="ALL">{isRtl ? 'كافة المجموعات' : 'All Groups'}</option>
+                        {activeWave.groups.map(g => (
+                          <option key={g.groupId} value={g.groupId}>{g.groupName}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Product Groups & Items List */}
+                  <div className="space-y-4">
+                    {filteredGroups.length === 0 ? (
+                      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-8 text-center">
+                        <Boxes className="w-12 h-12 text-slate-600 mx-auto mb-2" />
+                        <p className="text-sm text-slate-400">{isRtl ? 'لا توجد مجموعات تطابق البحث المحدد' : 'No matching product groups found'}</p>
+                      </div>
+                    ) : (
+                      filteredGroups.map((group, groupIdx) => {
+                        const assignedWorker = workers.find(w => w.id === group.assignedWorkerId);
+                        const isGroupCompleted = group.items.every(i => i.status === 'COMPLETED');
+                        const pickedItemsCount = group.items.filter(i => i.status === 'COMPLETED').length;
+                        const completionPercent = group.items.length > 0 ? Math.round((pickedItemsCount / group.items.length) * 100) : 0;
+
+                        return (
+                          <div
+                            key={group.groupId}
+                            className="bg-slate-900/90 border border-slate-800 rounded-2xl shadow-xl overflow-hidden transition-all"
+                          >
+                            {/* Group Header Card */}
+                            <div className={`p-4 border-b flex flex-col lg:flex-row lg:items-center justify-between gap-3 ${
+                              group.difficulty === 'HIGH_EXPERT'
+                                ? 'bg-gradient-to-r from-red-950/40 via-slate-900 to-slate-900 border-red-900/40'
+                                : group.difficulty === 'MEDIUM_INTERMEDIATE'
+                                ? 'bg-gradient-to-r from-amber-950/40 via-slate-900 to-slate-900 border-amber-900/40'
+                                : 'bg-gradient-to-r from-emerald-950/40 via-slate-900 to-slate-900 border-emerald-900/40'
+                            }`}>
+                              <div className="space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="bg-slate-800 text-indigo-300 font-mono text-xs px-2 py-0.5 rounded-md font-bold">
+                                    #{groupIdx + 1}
+                                  </span>
+                                  <h2 className="text-base font-black text-white">{group.groupName}</h2>
+                                  {getDifficultyBadge(group.difficulty)}
+                                </div>
+                                <p className="text-xs text-slate-400 flex items-center gap-3">
+                                  <span>{isRtl ? 'عدد الأصناف:' : 'Items:'} <strong className="text-white">{group.items.length}</strong></span>
+                                  <span>•</span>
+                                  <span>{isRtl ? 'الفواتير المخدومة:' : 'Invoices:'} <strong className="text-white">{group.invoicesCount}</strong></span>
+                                  <span>•</span>
+                                  <span>{isRtl ? 'نسبة الإنجاز:' : 'Progress:'} <strong className={completionPercent === 100 ? 'text-emerald-400' : 'text-amber-400'}>{completionPercent}%</strong></span>
+                                </p>
                               </div>
-                              {assignedWorker && getExperienceBadge(assignedWorker.experienceLevel)}
-                            </div>
 
-                            {/* Add Item to Group Button */}
-                            <button
-                              onClick={() => setAddingToGroupId(group.groupId)}
-                              className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm transition-all"
-                              title="إضافة صنف يدوياً إلى هذه المجموعة"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                              <span>{isRtl ? 'إضافة صنف' : 'Add Item'}</span>
-                            </button>
-
-                            {/* Difficulty Selector */}
-                            <div className="flex items-center gap-1 bg-slate-950/80 border border-slate-800 rounded-xl px-2.5 py-1.5">
-                              <span className="text-[10px] text-slate-400 font-bold">{isRtl ? 'الصعوبة:' : 'Difficulty:'}</span>
-                              <select
-                                value={group.difficulty}
-                                onChange={(e) => handleDifficultyChange(group.groupId, e.target.value as GroupDifficultyLevel)}
-                                className="bg-transparent text-xs font-bold text-slate-100 focus:outline-none cursor-pointer"
-                              >
-                                <option value="HIGH_EXPERT" className="bg-slate-900 text-red-300">{isRtl ? 'صعبة (خبير)' : 'High (Expert)'}</option>
-                                <option value="MEDIUM_INTERMEDIATE" className="bg-slate-900 text-amber-300">{isRtl ? 'متوسطة' : 'Medium'}</option>
-                                <option value="LOW_NOVICE" className="bg-slate-900 text-emerald-300">{isRtl ? 'سهلة (مبتدئ)' : 'Low (Novice)'}</option>
-                              </select>
-                            </div>
-
-                            {/* PDF Worker Slip Export Button */}
-                            <button
-                              onClick={() => exportWorkerPickingSheetPdf(activeWave, group, assignedWorker)}
-                              className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm"
-                              title={isRtl ? 'طباعة كشف وتذكرة التجهيز الخاصة بالعامل' : 'Print Worker Picking Slip'}
-                            >
-                              <Printer className="w-3.5 h-3.5 text-indigo-400" />
-                              <span className="hidden sm:inline">{isRtl ? 'كشف العامل (PDF)' : 'Worker Slip'}</span>
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Packaging Breakdown Summary Banner for Group */}
-                        <div className="bg-slate-950/80 border-b border-slate-800/80 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
-                          <div className="flex flex-wrap items-center gap-3">
-                            <span className="text-slate-400 font-bold">{isRtl ? 'آلية تجميع العبوات للمجموعة:' : 'Packaging Breakdown:'}</span>
-                            <span className="bg-amber-950/60 text-amber-300 border border-amber-800/60 px-2.5 py-1 rounded-lg font-mono font-bold">
-                              📦 {group.totalCartons} {isRtl ? 'كرتونة' : 'Cartons'}
-                            </span>
-                            <span className="bg-purple-950/60 text-purple-300 border border-purple-800/60 px-2.5 py-1 rounded-lg font-mono font-bold">
-                              🧃 {group.totalPacks} {isRtl ? 'باكت' : 'Packs'}
-                            </span>
-                            <span className="bg-blue-950/60 text-blue-300 border border-blue-800/60 px-2.5 py-1 rounded-lg font-mono font-bold">
-                              🔹 {group.totalPieces} {isRtl ? 'حبات فردية' : 'Loose Pieces'}
-                            </span>
-                            <span className="text-slate-400 font-mono">
-                              = <strong>{group.totalQty}</strong> {isRtl ? 'إجمالي الحبات' : 'Total Pcs'}
-                            </span>
-                          </div>
-
-                          <div className="text-[11px] text-slate-400">
-                            {group.items.length} {isRtl ? 'أصناف مدمجة الكود' : 'Aggregated SKUs'}
-                          </div>
-                        </div>
-
-                        {/* Group Items Table with Touch Header Locking and Manual Quantity Edit */}
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-right text-xs">
-                            <thead className="bg-slate-950/90 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
-                              <tr>
-                                <th className="p-3 text-center w-12">#</th>
-                                <th className="p-3">{isRtl ? 'كود الصنف / الباركود' : 'Item Barcode'}</th>
-                                <th className="p-3">{isRtl ? 'اسم وبيان الصنف' : 'Item Description'}</th>
-                                <th className="p-3 text-center">{isRtl ? 'إجمالي المطلوب' : 'Total Qty'}</th>
-
-                                {/* TOUCH LOCKABLE HEADER: Cartons */}
-                                <th
-                                  onClick={() => {
-                                    setActiveTargetColumn('cartons');
-                                    if (settings.soundEnabled) SoundEffects.playScanMatch(settings.soundVolume);
-                                  }}
-                                  className={`p-3 text-center cursor-pointer transition-all ${
-                                    activeTargetColumn === 'cartons'
-                                      ? 'bg-amber-500/30 text-amber-300 border-b-2 border-amber-400 font-black'
-                                      : 'text-amber-300/80 hover:bg-slate-800'
-                                  }`}
-                                  title="المس لتثبيت تسجيل المسح في عمود الكراتين"
-                                >
-                                  <div className="flex items-center justify-center gap-1">
-                                    {activeTargetColumn === 'cartons' && <Pin className="w-3 h-3 text-amber-400 animate-bounce" />}
-                                    <span>{isRtl ? 'الكراتين' : 'Cartons'}</span>
+                              {/* Worker Assignment & Actions */}
+                              <div className="flex flex-wrap items-center gap-2.5">
+                                {/* Worker Selector Dropdown */}
+                                <div className="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 rounded-xl px-2.5 py-1.5">
+                                  <UserCheck className="w-4 h-4 text-indigo-400" />
+                                  <div className="flex flex-col">
+                                    <span className="text-[10px] text-slate-400 font-bold">{isRtl ? 'العامل المسند:' : 'Assigned Worker:'}</span>
+                                    <select
+                                      value={group.assignedWorkerId || ''}
+                                      onChange={(e) => handleAssignWorkerToGroup(group.groupId, e.target.value)}
+                                      className="bg-transparent text-xs font-bold text-slate-100 focus:outline-none cursor-pointer"
+                                    >
+                                      <option value="" className="bg-slate-900 text-slate-400">
+                                        {isRtl ? '-- حدد عامل للتجهيز --' : '-- Assign Worker --'}
+                                      </option>
+                                      {workers.map(w => (
+                                        <option key={w.id} value={w.id} className="bg-slate-900 text-slate-100">
+                                          {w.name} ({w.code} - {w.experienceLevel === 'EXPERT' ? 'خبير' : w.experienceLevel === 'INTERMEDIATE' ? 'متوسط' : 'مبتدئ'})
+                                        </option>
+                                      ))}
+                                    </select>
                                   </div>
-                                </th>
+                                  {assignedWorker && getExperienceBadge(assignedWorker.experienceLevel)}
+                                </div>
 
-                                {/* TOUCH LOCKABLE HEADER: Packs */}
-                                <th
-                                  onClick={() => {
-                                    setActiveTargetColumn('packs');
-                                    if (settings.soundEnabled) SoundEffects.playScanMatch(settings.soundVolume);
-                                  }}
-                                  className={`p-3 text-center cursor-pointer transition-all ${
-                                    activeTargetColumn === 'packs'
-                                      ? 'bg-purple-500/30 text-purple-200 border-b-2 border-purple-400 font-black'
-                                      : 'text-purple-300/80 hover:bg-slate-800'
-                                  }`}
-                                  title="المس لتثبيت تسجيل المسح في عمود الباكتات"
+                                {/* Add Item to Group Button */}
+                                <button
+                                  onClick={() => setAddingToGroupId(group.groupId)}
+                                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm transition-all"
+                                  title="إضافة صنف يدوياً إلى هذه المجموعة"
                                 >
-                                  <div className="flex items-center justify-center gap-1">
-                                    {activeTargetColumn === 'packs' && <Pin className="w-3 h-3 text-purple-400 animate-bounce" />}
-                                    <span>{isRtl ? 'الباكتات' : 'Packs'}</span>
-                                  </div>
-                                </th>
+                                  <Plus className="w-3.5 h-3.5" />
+                                  <span>{isRtl ? 'إضافة صنف' : 'Add Item'}</span>
+                                </button>
 
-                                {/* TOUCH LOCKABLE HEADER: Loose */}
-                                <th
-                                  onClick={() => {
-                                    setActiveTargetColumn('pieces');
-                                    if (settings.soundEnabled) SoundEffects.playScanMatch(settings.soundVolume);
-                                  }}
-                                  className={`p-3 text-center cursor-pointer transition-all ${
-                                    activeTargetColumn === 'pieces'
-                                      ? 'bg-blue-500/30 text-blue-200 border-b-2 border-blue-400 font-black'
-                                      : 'text-blue-300/80 hover:bg-slate-800'
-                                  }`}
-                                  title="المس لتثبيت تسجيل المسح في عمود الحبات"
-                                >
-                                  <div className="flex items-center justify-center gap-1">
-                                    {activeTargetColumn === 'pieces' && <Pin className="w-3 h-3 text-blue-400 animate-bounce" />}
-                                    <span>{isRtl ? 'حبات متبقية' : 'Loose'}</span>
-                                  </div>
-                                </th>
-
-                                <th className="p-3 text-center">{isRtl ? 'المحقق / الملتقط' : 'Picked Qty'}</th>
-                                <th className="p-3 text-center">{isRtl ? 'الفواتير' : 'Invoices'}</th>
-                                <th className="p-3 text-center">{isRtl ? 'الحالة' : 'Status'}</th>
-                                <th className="p-3 text-center w-10">{isRtl ? 'حذف' : 'Del'}</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-800/60">
-                              {group.items.map((item, itemIdx) => {
-                                const isItemDone = item.status === 'COMPLETED';
-                                return (
-                                  <tr
-                                    key={item.id}
-                                    className={`transition-colors ${
-                                      isItemDone ? 'bg-emerald-950/20 hover:bg-emerald-950/30' : 'hover:bg-slate-800/40'
-                                    }`}
+                                {/* Difficulty Selector */}
+                                <div className="flex items-center gap-1 bg-slate-950/80 border border-slate-800 rounded-xl px-2.5 py-1.5">
+                                  <span className="text-[10px] text-slate-400 font-bold">{isRtl ? 'الصعوبة:' : 'Difficulty:'}</span>
+                                  <select
+                                    value={group.difficulty}
+                                    onChange={(e) => handleDifficultyChange(group.groupId, e.target.value as GroupDifficultyLevel)}
+                                    className="bg-transparent text-xs font-bold text-slate-100 focus:outline-none cursor-pointer"
                                   >
-                                    <td className="p-3 text-center text-slate-500 font-mono text-[11px]">
-                                      {itemIdx + 1}
-                                    </td>
-                                    <td className="p-3">
-                                      <span className="font-mono font-bold text-amber-300 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
-                                        {item.itemCode}
-                                      </span>
-                                    </td>
-                                    <td className="p-3">
-                                      <div className="font-semibold text-slate-100">{item.itemName}</div>
-                                      <div className="text-[10px] text-slate-400">
-                                        {item.unit} | معامل كرتونة: ×{item.cartonFactor} | باكت: ×{item.packFactor}
-                                      </div>
-                                    </td>
+                                    <option value="HIGH_EXPERT" className="bg-slate-900 text-red-300">{isRtl ? 'صعبة (خبير)' : 'High (Expert)'}</option>
+                                    <option value="MEDIUM_INTERMEDIATE" className="bg-slate-900 text-amber-300">{isRtl ? 'متوسطة' : 'Medium'}</option>
+                                    <option value="LOW_NOVICE" className="bg-slate-900 text-emerald-300">{isRtl ? 'سهلة (مبتدئ)' : 'Low (Novice)'}</option>
+                                  </select>
+                                </div>
 
-                                    {/* Editable Total Required Qty */}
-                                    <td className="p-3 text-center">
-                                      {isManualEditMode ? (
-                                        <div className="inline-flex flex-col items-center gap-1">
-                                          <div className="flex items-center gap-1">
+                                {/* PDF Worker Slip Export Button */}
+                                <button
+                                  onClick={() => exportWorkerPickingSheetPdf(activeWave, group, assignedWorker)}
+                                  className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm"
+                                  title={isRtl ? 'طباعة كشف وتذكرة التجهيز الخاصة بالعامل' : 'Print Worker Picking Slip'}
+                                >
+                                  <Printer className="w-3.5 h-3.5 text-indigo-400" />
+                                  <span className="hidden sm:inline">{isRtl ? 'كشف العامل (PDF)' : 'Worker Slip'}</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Packaging Breakdown Summary Banner for Group */}
+                            <div className="bg-slate-950/80 border-b border-slate-800/80 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+                              <div className="flex flex-wrap items-center gap-3">
+                                <span className="text-slate-400 font-bold">{isRtl ? 'آلية تجميع العبوات للمجموعة:' : 'Packaging Breakdown:'}</span>
+                                <span className="bg-amber-950/60 text-amber-300 border border-amber-800/60 px-2.5 py-1 rounded-lg font-mono font-bold">
+                                  📦 {group.totalCartons} {isRtl ? 'كرتونة' : 'Cartons'}
+                                </span>
+                                <span className="bg-purple-950/60 text-purple-300 border border-purple-800/60 px-2.5 py-1 rounded-lg font-mono font-bold">
+                                  🧃 {group.totalPacks} {isRtl ? 'باكت' : 'Packs'}
+                                </span>
+                                <span className="bg-blue-950/60 text-blue-300 border border-blue-800/60 px-2.5 py-1 rounded-lg font-mono font-bold">
+                                  🔹 {group.totalPieces} {isRtl ? 'حبات فردية' : 'Loose Pieces'}
+                                </span>
+                                <span className="text-slate-400 font-mono">
+                                  = <strong>{group.totalQty}</strong> {isRtl ? 'إجمالي الحبات' : 'Total Pcs'}
+                                </span>
+                              </div>
+
+                              <div className="text-[11px] text-slate-400">
+                                {group.items.length} {isRtl ? 'أصناف مدمجة الكود' : 'Aggregated SKUs'}
+                              </div>
+                            </div>
+
+                            {/* Group Items Table with Touch Header Locking and Manual Quantity Edit */}
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-right text-xs">
+                                <thead className="bg-slate-950/90 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
+                                  <tr>
+                                    <th className="p-3 text-center w-12">#</th>
+                                    <th className="p-3">{isRtl ? 'كود الصنف / الباركود' : 'Item Barcode'}</th>
+                                    <th className="p-3">{isRtl ? 'اسم وبيان الصنف' : 'Item Description'}</th>
+                                    <th className="p-3 text-center">{isRtl ? 'إجمالي المطلوب' : 'Total Qty'}</th>
+
+                                    {/* TOUCH LOCKABLE HEADER: Cartons */}
+                                    <th
+                                      onClick={() => {
+                                        setActiveTargetColumn('cartons');
+                                        if (settings.soundEnabled) SoundEffects.playScanMatch(settings.soundVolume);
+                                      }}
+                                      className={`p-3 text-center cursor-pointer transition-all ${
+                                        activeTargetColumn === 'cartons'
+                                          ? 'bg-amber-500/30 text-amber-300 border-b-2 border-amber-400 font-black'
+                                          : 'text-amber-300/80 hover:bg-slate-800'
+                                      }`}
+                                      title="المس لتثبيت تسجيل المسح في عمود الكراتين"
+                                    >
+                                      <div className="flex items-center justify-center gap-1">
+                                        {activeTargetColumn === 'cartons' && <Pin className="w-3 h-3 text-amber-400 animate-bounce" />}
+                                        <span>{isRtl ? 'الكراتين' : 'Cartons'}</span>
+                                      </div>
+                                    </th>
+
+                                    {/* TOUCH LOCKABLE HEADER: Packs */}
+                                    <th
+                                      onClick={() => {
+                                        setActiveTargetColumn('packs');
+                                        if (settings.soundEnabled) SoundEffects.playScanMatch(settings.soundVolume);
+                                      }}
+                                      className={`p-3 text-center cursor-pointer transition-all ${
+                                        activeTargetColumn === 'packs'
+                                          ? 'bg-purple-500/30 text-purple-200 border-b-2 border-purple-400 font-black'
+                                          : 'text-purple-300/80 hover:bg-slate-800'
+                                      }`}
+                                      title="المس لتثبيت تسجيل المسح في عمود الباكتات"
+                                    >
+                                      <div className="flex items-center justify-center gap-1">
+                                        {activeTargetColumn === 'packs' && <Pin className="w-3 h-3 text-purple-400 animate-bounce" />}
+                                        <span>{isRtl ? 'الباكتات' : 'Packs'}</span>
+                                      </div>
+                                    </th>
+
+                                    {/* TOUCH LOCKABLE HEADER: Loose */}
+                                    <th
+                                      onClick={() => {
+                                        setActiveTargetColumn('pieces');
+                                        if (settings.soundEnabled) SoundEffects.playScanMatch(settings.soundVolume);
+                                      }}
+                                      className={`p-3 text-center cursor-pointer transition-all ${
+                                        activeTargetColumn === 'pieces'
+                                          ? 'bg-blue-500/30 text-blue-200 border-b-2 border-blue-400 font-black'
+                                          : 'text-blue-300/80 hover:bg-slate-800'
+                                      }`}
+                                      title="المس لتثبيت تسجيل المسح في عمود الحبات"
+                                    >
+                                      <div className="flex items-center justify-center gap-1">
+                                        {activeTargetColumn === 'pieces' && <Pin className="w-3 h-3 text-blue-400 animate-bounce" />}
+                                        <span>{isRtl ? 'حبات متبقية' : 'Loose'}</span>
+                                      </div>
+                                    </th>
+
+                                    <th className="p-3 text-center">{isRtl ? 'المحقق / الملتقط' : 'Picked Qty'}</th>
+                                    <th className="p-3 text-center">{isRtl ? 'الفواتير' : 'Invoices'}</th>
+                                    <th className="p-3 text-center">{isRtl ? 'الحالة' : 'Status'}</th>
+                                    <th className="p-3 text-center w-10">{isRtl ? 'حذف' : 'Del'}</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800/60">
+                                  {group.items.map((item, itemIdx) => {
+                                    const isItemDone = item.status === 'COMPLETED';
+                                    return (
+                                      <tr
+                                        key={item.id}
+                                        className={`transition-colors ${
+                                          isItemDone ? 'bg-emerald-950/20 hover:bg-emerald-950/30' : 'hover:bg-slate-800/40'
+                                        }`}
+                                      >
+                                        <td className="p-3 text-center text-slate-500 font-mono text-[11px]">
+                                          {itemIdx + 1}
+                                        </td>
+                                        <td className="p-3">
+                                          <span className="font-mono font-bold text-amber-300 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                                            {item.itemCode}
+                                          </span>
+                                        </td>
+                                        <td className="p-3">
+                                          <div className="font-semibold text-slate-100">{item.itemName}</div>
+                                          <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                                            <span className="text-[10px] text-slate-400 font-mono">
+                                              {item.unit} | ×{item.cartonFactor} كرتونة | ×{item.packFactor} باكت
+                                            </span>
+                                            {item.systemUnit && (
+                                              <span className="bg-indigo-950/80 text-indigo-300 border border-indigo-700/60 px-1.5 py-0.2 rounded text-[10px] font-bold">
+                                                وحدة الصرف للنظام: {item.systemUnit}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </td>
+
+                                        {/* Editable Total Required Qty */}
+                                        <td className="p-3 text-center">
+                                          {isManualEditMode ? (
+                                            <div className="inline-flex flex-col items-center gap-1">
+                                              <div className="flex items-center gap-1">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleQuickAdjustItemQty(group.groupId, item.id, -1)}
+                                                  className="p-1 bg-slate-950 hover:bg-slate-800 rounded text-slate-400 hover:text-white border border-slate-800"
+                                                  title="إنقاص 1"
+                                                >
+                                                  <Minus className="w-3 h-3" />
+                                                </button>
+                                                <input
+                                                  type="number"
+                                                  min="1"
+                                                  value={item.totalRequiredQty}
+                                                  onChange={(e) => {
+                                                    const val = Math.max(1, Number(e.target.value) || 1);
+                                                    const cFactor = item.cartonFactor || 24;
+                                                    const pFactor = item.packFactor || 6;
+                                                    handleUpdateWaveItem(group.groupId, item.id, {
+                                                      totalRequiredQty: val,
+                                                      cartonsCount: Math.floor(val / cFactor),
+                                                      packsCount: Math.floor((val % cFactor) / pFactor),
+                                                      piecesCount: (val % cFactor) % pFactor
+                                                    });
+                                                  }}
+                                                  className="w-16 bg-slate-950 border border-indigo-700/80 rounded px-1.5 py-1 text-center font-mono font-black text-indigo-300 focus:outline-none focus:border-indigo-400 shadow-inner"
+                                                />
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleQuickAdjustItemQty(group.groupId, item.id, 1)}
+                                                  className="p-1 bg-slate-950 hover:bg-slate-800 rounded text-indigo-400 hover:text-indigo-300 border border-slate-800"
+                                                  title="زيادة 1"
+                                                >
+                                                  <Plus className="w-3 h-3" />
+                                                </button>
+                                              </div>
+
+                                              {/* Quick Adjust Buttons */}
+                                              <div className="flex items-center gap-1 text-[9px] font-mono text-slate-400">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleQuickAdjustItemQty(group.groupId, item.id, -10)}
+                                                  className="px-1 py-0.5 hover:bg-slate-800 rounded text-slate-400 hover:text-red-400"
+                                                  title="إنقاص 10"
+                                                >
+                                                  -10
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleQuickAdjustItemQty(group.groupId, item.id, 10)}
+                                                  className="px-1 py-0.5 hover:bg-slate-800 rounded text-slate-400 hover:text-emerald-400"
+                                                  title="زيادة 10"
+                                                >
+                                                  +10
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleRebalanceSingleItem(group.groupId, item.id)}
+                                                  className="px-1 py-0.5 bg-amber-950/60 hover:bg-amber-900/80 text-amber-300 rounded border border-amber-800/40"
+                                                  title="إعادة موازنة تفكيك العبوات آلياً"
+                                                >
+                                                  ⚡
+                                                </button>
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            <div className="font-mono font-black text-indigo-300 text-xs bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 inline-block shadow-sm">
+                                              {item.totalRequiredQty} <span className="text-[10px] text-slate-400 font-normal">{item.unit}</span>
+                                            </div>
+                                          )}
+                                        </td>
+
+                                        {/* Editable Cartons Count */}
+                                        <td className="p-3 text-center">
+                                          {isManualEditMode ? (
+                                            <div className="inline-flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+                                              <button
+                                                type="button"
+                                                onClick={() => handleUpdateWaveItem(group.groupId, item.id, { cartonsCount: Math.max(0, (item.cartonsCount || 0) - 1) })}
+                                                className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white"
+                                              >
+                                                <Minus className="w-3 h-3" />
+                                              </button>
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                value={item.cartonsCount || 0}
+                                                onChange={(e) => handleUpdateWaveItem(group.groupId, item.id, { cartonsCount: Number(e.target.value) || 0 })}
+                                                className="w-10 bg-transparent text-center font-mono font-bold text-amber-300 focus:outline-none"
+                                              />
+                                              <button
+                                                type="button"
+                                                onClick={() => handleUpdateWaveItem(group.groupId, item.id, { cartonsCount: (item.cartonsCount || 0) + 1 })}
+                                                className="p-1 hover:bg-slate-800 rounded text-amber-400 hover:text-amber-300"
+                                              >
+                                                <Plus className="w-3 h-3" />
+                                              </button>
+                                            </div>
+                                          ) : (
+                                            <div className="font-mono font-bold text-amber-300 text-xs bg-amber-950/30 border border-amber-800/40 px-2 py-0.5 rounded inline-block">
+                                              📦 {item.cartonsCount || 0}
+                                            </div>
+                                          )}
+                                        </td>
+
+                                        {/* Editable Packs Count */}
+                                        <td className="p-3 text-center">
+                                          {isManualEditMode ? (
+                                            <div className="inline-flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+                                              <button
+                                                type="button"
+                                                onClick={() => handleUpdateWaveItem(group.groupId, item.id, { packsCount: Math.max(0, (item.packsCount || 0) - 1) })}
+                                                className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white"
+                                              >
+                                                <Minus className="w-3 h-3" />
+                                              </button>
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                value={item.packsCount || 0}
+                                                onChange={(e) => handleUpdateWaveItem(group.groupId, item.id, { packsCount: Number(e.target.value) || 0 })}
+                                                className="w-10 bg-transparent text-center font-mono font-bold text-purple-300 focus:outline-none"
+                                              />
+                                              <button
+                                                type="button"
+                                                onClick={() => handleUpdateWaveItem(group.groupId, item.id, { packsCount: (item.packsCount || 0) + 1 })}
+                                                className="p-1 hover:bg-slate-800 rounded text-purple-400 hover:text-purple-300"
+                                              >
+                                                <Plus className="w-3 h-3" />
+                                              </button>
+                                            </div>
+                                          ) : (
+                                            <div className="font-mono font-bold text-purple-300 text-xs bg-purple-950/30 border border-purple-800/40 px-2 py-0.5 rounded inline-block">
+                                              🧃 {item.packsCount || 0}
+                                            </div>
+                                          )}
+                                        </td>
+
+                                        {/* Editable Pieces Count */}
+                                        <td className="p-3 text-center">
+                                          {isManualEditMode ? (
+                                            <div className="inline-flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+                                              <button
+                                                type="button"
+                                                onClick={() => handleUpdateWaveItem(group.groupId, item.id, { piecesCount: Math.max(0, (item.piecesCount || 0) - 1) })}
+                                                className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white"
+                                              >
+                                                <Minus className="w-3 h-3" />
+                                              </button>
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                value={item.piecesCount || 0}
+                                                onChange={(e) => handleUpdateWaveItem(group.groupId, item.id, { piecesCount: Number(e.target.value) || 0 })}
+                                                className="w-10 bg-transparent text-center font-mono font-bold text-blue-300 focus:outline-none"
+                                              />
+                                              <button
+                                                type="button"
+                                                onClick={() => handleUpdateWaveItem(group.groupId, item.id, { piecesCount: (item.piecesCount || 0) + 1 })}
+                                                className="p-1 hover:bg-slate-800 rounded text-blue-400 hover:text-blue-300"
+                                              >
+                                                <Plus className="w-3 h-3" />
+                                              </button>
+                                            </div>
+                                          ) : (
+                                            <div className="font-mono font-bold text-blue-300 text-xs bg-blue-950/30 border border-blue-800/40 px-2 py-0.5 rounded inline-block">
+                                              🔹 {item.piecesCount || 0}
+                                            </div>
+                                          )}
+                                        </td>
+
+                                        {/* Picked Qty with Stepper */}
+                                        <td className="p-3 text-center">
+                                          <div className="inline-flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
                                             <button
                                               type="button"
-                                              onClick={() => handleQuickAdjustItemQty(group.groupId, item.id, -1)}
-                                              className="p-1 bg-slate-950 hover:bg-slate-800 rounded text-slate-400 hover:text-white border border-slate-800"
-                                              title="إنقاص 1"
+                                              onClick={() => handleUpdateWaveItem(group.groupId, item.id, { pickedQty: Math.max(0, (item.pickedQty || 0) - 1) })}
+                                              className="p-1 hover:bg-slate-800 rounded text-slate-400"
                                             >
                                               <Minus className="w-3 h-3" />
                                             </button>
                                             <input
                                               type="number"
-                                              min="1"
-                                              value={item.totalRequiredQty}
-                                              onChange={(e) => {
-                                                const val = Math.max(1, Number(e.target.value) || 1);
-                                                const cFactor = item.cartonFactor || 24;
-                                                const pFactor = item.packFactor || 6;
-                                                handleUpdateWaveItem(group.groupId, item.id, {
-                                                  totalRequiredQty: val,
-                                                  cartonsCount: Math.floor(val / cFactor),
-                                                  packsCount: Math.floor((val % cFactor) / pFactor),
-                                                  piecesCount: (val % cFactor) % pFactor
-                                                });
-                                              }}
-                                              className="w-16 bg-slate-950 border border-indigo-700/80 rounded px-1.5 py-1 text-center font-mono font-black text-indigo-300 focus:outline-none focus:border-indigo-400 shadow-inner"
+                                              min="0"
+                                              max={item.totalRequiredQty}
+                                              value={item.pickedQty}
+                                              onChange={(e) => handleUpdateWaveItem(group.groupId, item.id, { pickedQty: Math.min(item.totalRequiredQty, Number(e.target.value) || 0) })}
+                                              className="w-10 bg-transparent text-center font-mono font-bold text-emerald-400 focus:outline-none"
                                             />
                                             <button
                                               type="button"
-                                              onClick={() => handleQuickAdjustItemQty(group.groupId, item.id, 1)}
-                                              className="p-1 bg-slate-950 hover:bg-slate-800 rounded text-indigo-400 hover:text-indigo-300 border border-slate-800"
-                                              title="زيادة 1"
+                                              onClick={() => handleUpdateWaveItem(group.groupId, item.id, { pickedQty: Math.min(item.totalRequiredQty, (item.pickedQty || 0) + 1) })}
+                                              className="p-1 hover:bg-slate-800 rounded text-emerald-400"
                                             >
                                               <Plus className="w-3 h-3" />
                                             </button>
                                           </div>
+                                        </td>
 
-                                          {/* Quick Adjust Buttons */}
-                                          <div className="flex items-center gap-1 text-[9px] font-mono text-slate-400">
+                                        {/* Invoices Breakdown Button */}
+                                        <td className="p-3 text-center">
+                                          <button
+                                            onClick={() => setSelectedItemForDetails(item)}
+                                            className="bg-slate-800 hover:bg-slate-700 text-blue-300 border border-blue-900/50 px-2.5 py-1 rounded-lg text-[11px] font-bold inline-flex items-center gap-1"
+                                          >
+                                            <Eye className="w-3 h-3" />
+                                            <span>{item.invoiceSources.length} {isRtl ? 'فواتير' : 'Invs'}</span>
+                                          </button>
+                                        </td>
+
+                                        {/* Pick Action / Toggle */}
+                                        <td className="p-3 text-center">
+                                          <button
+                                            onClick={() => handleToggleItemPicked(group.groupId, item.id)}
+                                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 mx-auto ${
+                                              isItemDone
+                                                ? 'bg-emerald-600 text-white shadow-sm'
+                                                : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                                            }`}
+                                          >
+                                            <CheckCircle2 className={`w-3.5 h-3.5 ${isItemDone ? 'text-white' : 'text-slate-500'}`} />
+                                            <span>{isItemDone ? (isRtl ? 'تم' : 'Done') : (isRtl ? 'التقاط' : 'Pick')}</span>
+                                          </button>
+                                        </td>
+
+                                        {/* Delete Item */}
+                                        <td className="p-3 text-center">
+                                          {isManualEditMode ? (
                                             <button
-                                              type="button"
-                                              onClick={() => handleQuickAdjustItemQty(group.groupId, item.id, -10)}
-                                              className="px-1 py-0.5 hover:bg-slate-800 rounded text-slate-400 hover:text-red-400"
-                                              title="إنقاص 10"
+                                              onClick={() => handleRemoveItemFromGroup(group.groupId, item.id)}
+                                              className="p-1 text-slate-500 hover:text-red-400 hover:bg-red-950/40 rounded transition-colors"
+                                              title="حذف الصنف من قائمة التجهيز"
                                             >
-                                              -10
+                                              <Trash2 className="w-3.5 h-3.5" />
                                             </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => handleQuickAdjustItemQty(group.groupId, item.id, 10)}
-                                              className="px-1 py-0.5 hover:bg-slate-800 rounded text-slate-400 hover:text-emerald-400"
-                                              title="زيادة 10"
-                                            >
-                                              +10
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => handleRebalanceSingleItem(group.groupId, item.id)}
-                                              className="px-1 py-0.5 bg-amber-950/60 hover:bg-amber-900/80 text-amber-300 rounded border border-amber-800/40"
-                                              title="إعادة موازنة تفكيك العبوات آلياً"
-                                            >
-                                              ⚡
-                                            </button>
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        <div className="font-mono font-black text-indigo-300 text-xs bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 inline-block shadow-sm">
-                                          {item.totalRequiredQty} <span className="text-[10px] text-slate-400 font-normal">{item.unit}</span>
-                                        </div>
-                                      )}
-                                    </td>
+                                          ) : (
+                                            <span className="text-slate-600 p-1 cursor-not-allowed" title="التعديل اليدوي معطل">
+                                              <Lock className="w-3 h-3" />
+                                            </span>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
 
-                                    {/* Editable Cartons Count */}
-                                    <td className="p-3 text-center">
-                                      {isManualEditMode ? (
-                                        <div className="inline-flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
-                                          <button
-                                            type="button"
-                                            onClick={() => handleUpdateWaveItem(group.groupId, item.id, { cartonsCount: Math.max(0, (item.cartonsCount || 0) - 1) })}
-                                            className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white"
-                                          >
-                                            <Minus className="w-3 h-3" />
-                                          </button>
-                                          <input
-                                            type="number"
-                                            min="0"
-                                            value={item.cartonsCount || 0}
-                                            onChange={(e) => handleUpdateWaveItem(group.groupId, item.id, { cartonsCount: Number(e.target.value) || 0 })}
-                                            className="w-10 bg-transparent text-center font-mono font-bold text-amber-300 focus:outline-none"
-                                          />
-                                          <button
-                                            type="button"
-                                            onClick={() => handleUpdateWaveItem(group.groupId, item.id, { cartonsCount: (item.cartonsCount || 0) + 1 })}
-                                            className="p-1 hover:bg-slate-800 rounded text-amber-400 hover:text-amber-300"
-                                          >
-                                            <Plus className="w-3 h-3" />
-                                          </button>
-                                        </div>
-                                      ) : (
-                                        <div className="font-mono font-bold text-amber-300 text-xs bg-amber-950/30 border border-amber-800/40 px-2 py-0.5 rounded inline-block">
-                                          📦 {item.cartonsCount || 0}
-                                        </div>
-                                      )}
-                                    </td>
+                  {/* Transition to Phase 2 Completion Banner */}
+                  <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-3 rounded-2xl border ${
+                        activeWave.phase1Completed
+                          ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-300'
+                          : 'bg-indigo-600/20 border-indigo-500/40 text-indigo-400'
+                      }`}>
+                        <CheckCircle2 className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-black text-white">
+                          {isRtl ? 'اكتمال المرحلة الأولى: التجميع الإجمالي لطلبات اليوم' : 'Phase 1: Total Consolidated Daily Picking Complete'}
+                        </h4>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {activeWave.phase1Completed
+                            ? (isRtl ? '✅ تم تأكيد تجميع كافة الأصناف والعبوات الإجمالية بنجاح. يمكنك الآن فرز كل فاتورة منفردة في المرحلة 2.' : 'Phase 1 confirmed complete. Proceed with Phase 2 individual invoice sorting.')
+                            : (isRtl ? 'عند الانتهاء من التقاط وتجميع الكميات الإجمالية لكافة الأصناف من المستودع، اضغط هنا لتأكيد المرحلة 1 والانتقال لفرز الفواتير.' : 'Click below once total warehouse picking is finished to unlock individual invoice packing.')}
+                        </p>
+                      </div>
+                    </div>
 
-                                    {/* Editable Packs Count */}
-                                    <td className="p-3 text-center">
-                                      {isManualEditMode ? (
-                                        <div className="inline-flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
-                                          <button
-                                            type="button"
-                                            onClick={() => handleUpdateWaveItem(group.groupId, item.id, { packsCount: Math.max(0, (item.packsCount || 0) - 1) })}
-                                            className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white"
-                                          >
-                                            <Minus className="w-3 h-3" />
-                                          </button>
-                                          <input
-                                            type="number"
-                                            min="0"
-                                            value={item.packsCount || 0}
-                                            onChange={(e) => handleUpdateWaveItem(group.groupId, item.id, { packsCount: Number(e.target.value) || 0 })}
-                                            className="w-10 bg-transparent text-center font-mono font-bold text-purple-300 focus:outline-none"
-                                          />
-                                          <button
-                                            type="button"
-                                            onClick={() => handleUpdateWaveItem(group.groupId, item.id, { packsCount: (item.packsCount || 0) + 1 })}
-                                            className="p-1 hover:bg-slate-800 rounded text-purple-400 hover:text-purple-300"
-                                          >
-                                            <Plus className="w-3 h-3" />
-                                          </button>
-                                        </div>
-                                      ) : (
-                                        <div className="font-mono font-bold text-purple-300 text-xs bg-purple-950/30 border border-purple-800/40 px-2 py-0.5 rounded inline-block">
-                                          🧃 {item.packsCount || 0}
-                                        </div>
-                                      )}
-                                    </td>
+                    <button
+                      type="button"
+                      onClick={handleTogglePhase1Completed}
+                      className={`w-full sm:w-auto px-6 py-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95 shrink-0 ${
+                        activeWave.phase1Completed
+                          ? 'bg-emerald-600 hover:bg-emerald-500 text-white ring-2 ring-emerald-400/50'
+                          : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white ring-2 ring-indigo-400/50'
+                      }`}
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>
+                        {activeWave.phase1Completed
+                          ? (isRtl ? 'المرحلة 1 مكتملة (الانتقال لفرز الفواتير ➔)' : 'Phase 1 Done (Switch to Phase 2 ➔)')
+                          : (isRtl ? 'تأكيد اكتمال التجميع الإجمالي والانتقال للمرحلة 2 ➔' : 'Confirm Phase 1 & Proceed to Phase 2 ➔')}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              )}
 
-                                    {/* Editable Pieces Count */}
-                                    <td className="p-3 text-center">
-                                      {isManualEditMode ? (
-                                        <div className="inline-flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
-                                          <button
-                                            type="button"
-                                            onClick={() => handleUpdateWaveItem(group.groupId, item.id, { piecesCount: Math.max(0, (item.piecesCount || 0) - 1) })}
-                                            className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white"
-                                          >
-                                            <Minus className="w-3 h-3" />
-                                          </button>
-                                          <input
-                                            type="number"
-                                            min="0"
-                                            value={item.piecesCount || 0}
-                                            onChange={(e) => handleUpdateWaveItem(group.groupId, item.id, { piecesCount: Number(e.target.value) || 0 })}
-                                            className="w-10 bg-transparent text-center font-mono font-bold text-blue-300 focus:outline-none"
-                                          />
-                                          <button
-                                            type="button"
-                                            onClick={() => handleUpdateWaveItem(group.groupId, item.id, { piecesCount: (item.piecesCount || 0) + 1 })}
-                                            className="p-1 hover:bg-slate-800 rounded text-blue-400 hover:text-blue-300"
-                                          >
-                                            <Plus className="w-3 h-3" />
-                                          </button>
-                                        </div>
-                                      ) : (
-                                        <div className="font-mono font-bold text-blue-300 text-xs bg-blue-950/30 border border-blue-800/40 px-2 py-0.5 rounded inline-block">
-                                          🔹 {item.piecesCount || 0}
-                                        </div>
-                                      )}
-                                    </td>
+              {/* ----------------------------------------------------------------- */}
+              {/* PHASE 2 VIEW: INDIVIDUAL INVOICE PREPARATION & SORTING            */}
+              {/* ----------------------------------------------------------------- */}
+              {activeWavePhase === 'PHASE_2_INVOICES' && (
+                <div className="space-y-4">
+                  {/* Phase 2 Header Summary */}
+                  <div className="bg-gradient-to-r from-purple-950/50 via-slate-900 to-slate-900 border border-purple-800/40 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-purple-400" />
+                        <h3 className="text-base font-black text-white">
+                          {isRtl ? 'المرحلة 2: تحضير وفرز كميات كل فاتورة منفردة' : 'Phase 2: Individual Invoice Preparation'}
+                        </h3>
+                      </div>
+                      <p className="text-xs text-slate-300">
+                        {isRtl 
+                          ? 'توزيع الكميات المجمعة وتجهيز طلبيات كل فاتورة على حدة والتأكد من مطابقة جميع البنود وتغليفها للشحن.'
+                          : 'Distribute picked bulk inventory into individual invoices for packing and dispatch.'}
+                      </p>
+                    </div>
 
-                                    {/* Picked Qty with Stepper */}
-                                    <td className="p-3 text-center">
-                                      <div className="inline-flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
-                                        <button
-                                          type="button"
-                                          onClick={() => handleUpdateWaveItem(group.groupId, item.id, { pickedQty: Math.max(0, (item.pickedQty || 0) - 1) })}
-                                          className="p-1 hover:bg-slate-800 rounded text-slate-400"
-                                        >
-                                          <Minus className="w-3 h-3" />
-                                        </button>
-                                        <input
-                                          type="number"
-                                          min="0"
-                                          max={item.totalRequiredQty}
-                                          value={item.pickedQty}
-                                          onChange={(e) => handleUpdateWaveItem(group.groupId, item.id, { pickedQty: Math.min(item.totalRequiredQty, Number(e.target.value) || 0) })}
-                                          className="w-10 bg-transparent text-center font-mono font-bold text-emerald-400 focus:outline-none"
-                                        />
-                                        <button
-                                          type="button"
-                                          onClick={() => handleUpdateWaveItem(group.groupId, item.id, { pickedQty: Math.min(item.totalRequiredQty, (item.pickedQty || 0) + 1) })}
-                                          className="p-1 hover:bg-slate-800 rounded text-emerald-400"
-                                        >
-                                          <Plus className="w-3 h-3" />
-                                        </button>
-                                      </div>
-                                    </td>
-
-                                    {/* Invoices Breakdown Button */}
-                                    <td className="p-3 text-center">
-                                      <button
-                                        onClick={() => setSelectedItemForDetails(item)}
-                                        className="bg-slate-800 hover:bg-slate-700 text-blue-300 border border-blue-900/50 px-2.5 py-1 rounded-lg text-[11px] font-bold inline-flex items-center gap-1"
-                                      >
-                                        <Eye className="w-3 h-3" />
-                                        <span>{item.invoiceSources.length} {isRtl ? 'فواتير' : 'Invs'}</span>
-                                      </button>
-                                    </td>
-
-                                    {/* Pick Action / Toggle */}
-                                    <td className="p-3 text-center">
-                                      <button
-                                        onClick={() => handleToggleItemPicked(group.groupId, item.id)}
-                                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 mx-auto ${
-                                          isItemDone
-                                            ? 'bg-emerald-600 text-white shadow-sm'
-                                            : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
-                                        }`}
-                                      >
-                                        <CheckCircle2 className={`w-3.5 h-3.5 ${isItemDone ? 'text-white' : 'text-slate-500'}`} />
-                                        <span>{isItemDone ? (isRtl ? 'تم' : 'Done') : (isRtl ? 'التقاط' : 'Pick')}</span>
-                                      </button>
-                                    </td>
-
-                                    {/* Delete Item */}
-                                    <td className="p-3 text-center">
-                                      {isManualEditMode ? (
-                                        <button
-                                          onClick={() => handleRemoveItemFromGroup(group.groupId, item.id)}
-                                          className="p-1 text-slate-500 hover:text-red-400 hover:bg-red-950/40 rounded transition-colors"
-                                          title="حذف الصنف من قائمة التجهيز"
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                      ) : (
-                                        <span className="text-slate-600 p-1 cursor-not-allowed" title="التعديل اليدوي معطل">
-                                          <Lock className="w-3 h-3" />
-                                        </span>
-                                      )}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
+                    <div className="flex items-center gap-3">
+                      <div className="bg-slate-950/80 border border-slate-800 px-4 py-2 rounded-xl text-center">
+                        <div className="text-[10px] text-slate-400 font-bold">{isRtl ? 'الفواتير المنجزة' : 'Prepared Invoices'}</div>
+                        <div className="text-base font-black text-emerald-400 font-mono">
+                          {(activeWave.preparedInvoices || []).length} / {activeWave.totalInvoicesCount}
                         </div>
                       </div>
+
+                      <div className="bg-slate-950/80 border border-slate-800 px-4 py-2 rounded-xl text-center">
+                        <div className="text-[10px] text-slate-400 font-bold">{isRtl ? 'نسبة الجاهزية' : 'Readiness'}</div>
+                        <div className="text-base font-black text-purple-300 font-mono">
+                          {activeWave.totalInvoicesCount > 0 
+                            ? Math.round(((activeWave.preparedInvoices || []).length / activeWave.totalInvoicesCount) * 100)
+                            : 0}%
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Search & Filter for Invoices */}
+                  <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div className="relative w-full sm:w-80">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 rtl:left-auto rtl:right-3" />
+                      <input
+                        type="text"
+                        value={phase2SearchInvoice}
+                        onChange={(e) => setPhase2SearchInvoice(e.target.value)}
+                        placeholder={isRtl ? 'بحث برقم الفاتورة أو اسم العميل أو الطلب...' : 'Search invoice no, customer, order...'}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 rtl:pl-3 rtl:pr-9 py-2 text-xs text-white focus:outline-none focus:border-purple-500"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                      <button
+                        type="button"
+                        onClick={() => exportPickingWaveToExcel(activeWave)}
+                        className="bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-800/40 px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm"
+                      >
+                        <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+                        <span>{isRtl ? 'تصدير شيت الفواتير (Excel)' : 'Export Invoices Excel'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Invoice Cards List */}
+                  {(() => {
+                    const invMap = new Map<string, {
+                      invoiceNo: string;
+                      customerName?: string;
+                      orderNo?: string;
+                      items: {
+                        itemCode: string;
+                        itemName: string;
+                        unit: string;
+                        systemUnit?: string;
+                        quantity: number;
+                        groupName: string;
+                      }[];
+                      totalQuantity: number;
+                    }>();
+
+                    activeWave.groups.forEach(group => {
+                      group.items.forEach(item => {
+                        item.invoiceSources.forEach(source => {
+                          const invKey = source.invoiceNo;
+                          if (!invMap.has(invKey)) {
+                            invMap.set(invKey, {
+                              invoiceNo: source.invoiceNo,
+                              customerName: source.customerName,
+                              orderNo: source.orderNo,
+                              items: [],
+                              totalQuantity: 0
+                            });
+                          }
+                          const inv = invMap.get(invKey)!;
+                          inv.items.push({
+                            itemCode: item.itemCode,
+                            itemName: item.itemName,
+                            unit: item.unit,
+                            systemUnit: item.systemUnit,
+                            quantity: source.quantity,
+                            groupName: group.groupName
+                          });
+                          inv.totalQuantity += source.quantity;
+                        });
+                      });
+                    });
+
+                    const preparedSet = new Set(activeWave.preparedInvoices || []);
+                    const allInvoicesList = Array.from(invMap.values());
+                    const filteredInvoices = allInvoicesList.filter(inv => {
+                      if (!phase2SearchInvoice) return true;
+                      const q = phase2SearchInvoice.toLowerCase();
+                      return (
+                        inv.invoiceNo.toLowerCase().includes(q) ||
+                        (inv.customerName && inv.customerName.toLowerCase().includes(q)) ||
+                        (inv.orderNo && inv.orderNo.toLowerCase().includes(q))
+                      );
+                    });
+
+                    if (filteredInvoices.length === 0) {
+                      return (
+                        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-10 text-center">
+                          <FileText className="w-12 h-12 text-slate-600 mx-auto mb-2" />
+                          <p className="text-sm text-slate-400">{isRtl ? 'لا توجد فواتير تطابق البحث' : 'No matching invoices found'}</p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="space-y-3">
+                        {filteredInvoices.map((inv, idx) => {
+                          const isPrepared = preparedSet.has(inv.invoiceNo);
+                          const isExpanded = expandedInvoiceNos.has(inv.invoiceNo);
+
+                          return (
+                            <div
+                              key={inv.invoiceNo}
+                              className={`border rounded-2xl transition-all shadow-lg overflow-hidden ${
+                                isPrepared
+                                  ? 'bg-emerald-950/20 border-emerald-800/60'
+                                  : 'bg-slate-900/90 border-slate-800'
+                              }`}
+                            >
+                              {/* Invoice Card Header */}
+                              <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div className="flex items-start sm:items-center gap-3">
+                                  <span className="bg-slate-800 text-purple-300 font-mono text-xs px-2.5 py-1 rounded-lg font-bold">
+                                    #{idx + 1}
+                                  </span>
+
+                                  <div className="space-y-0.5">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <h4 className="text-sm font-black text-white font-mono">
+                                        {isRtl ? `فاتورة رقم: ${inv.invoiceNo}` : `Invoice #${inv.invoiceNo}`}
+                                      </h4>
+                                      {inv.orderNo && (
+                                        <span className="text-[11px] text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800 font-mono">
+                                          طلب #{inv.orderNo}
+                                        </span>
+                                      )}
+                                      {isPrepared ? (
+                                        <span className="bg-emerald-950 text-emerald-300 border border-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                          <CheckCircle2 className="w-3 h-3" />
+                                          <span>{isRtl ? 'تم التحضير والفرز' : 'Prepared'}</span>
+                                        </span>
+                                      ) : (
+                                        <span className="bg-amber-950/60 text-amber-300 border border-amber-800/60 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                          {isRtl ? '⏳ بانتظار التحضير' : 'Pending Packing'}
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <div className="text-xs text-slate-400 flex flex-wrap items-center gap-3">
+                                      {inv.customerName && (
+                                        <span>{isRtl ? 'العميل:' : 'Customer:'} <strong className="text-slate-200">{inv.customerName}</strong></span>
+                                      )}
+                                      <span>•</span>
+                                      <span>{isRtl ? 'عدد الأصناف:' : 'Items:'} <strong className="text-white">{inv.items.length}</strong></span>
+                                      <span>•</span>
+                                      <span>{isRtl ? 'إجمالي الكمية:' : 'Total Qty:'} <strong className="text-indigo-300 font-mono">{inv.totalQuantity}</strong></span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleInvoiceExpand(inv.invoiceNo)}
+                                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-all"
+                                  >
+                                    <span>{isExpanded ? (isRtl ? 'إخفاء البنود' : 'Hide Items') : (isRtl ? 'عرض البنود' : 'Show Items')}</span>
+                                    {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleInvoicePrepared(inv.invoiceNo)}
+                                    className={`px-4 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all shadow-md active:scale-95 ${
+                                      isPrepared
+                                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white ring-1 ring-emerald-400'
+                                        : 'bg-purple-600 hover:bg-purple-500 text-white ring-1 ring-purple-400'
+                                    }`}
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <span>
+                                      {isPrepared 
+                                        ? (isRtl ? 'جاهزة للشحن ✅' : 'Ready for Shipping ✅') 
+                                        : (isRtl ? 'تأكيد اكتمال الفاتورة' : 'Mark as Prepared')}
+                                    </span>
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Expanded Invoice Items Table */}
+                              {isExpanded && (
+                                <div className="border-t border-slate-800/80 bg-slate-950/60 p-3">
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full text-right text-xs">
+                                      <thead className="text-[10px] text-slate-400 uppercase border-b border-slate-800/80 bg-slate-950/80">
+                                        <tr>
+                                          <th className="p-2 text-center w-10">#</th>
+                                          <th className="p-2">{isRtl ? 'كود الصنف' : 'Item Code'}</th>
+                                          <th className="p-2">{isRtl ? 'اسم وبيان الصنف' : 'Item Name'}</th>
+                                          <th className="p-2">{isRtl ? 'المجموعة' : 'Group'}</th>
+                                          <th className="p-2 text-center">{isRtl ? 'الكمية المطلوبة لهذه الفاتورة' : 'Invoice Qty'}</th>
+                                          <th className="p-2 text-center">{isRtl ? 'الوحدة المعرفة للصرف' : 'System Issue Unit'}</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-slate-800/40 font-medium">
+                                        {inv.items.map((line, lIdx) => (
+                                          <tr key={lIdx} className="hover:bg-slate-800/30">
+                                            <td className="p-2 text-center text-slate-500 font-mono text-[11px]">{lIdx + 1}</td>
+                                            <td className="p-2 font-mono font-bold text-amber-300">{line.itemCode}</td>
+                                            <td className="p-2 text-slate-100">{line.itemName}</td>
+                                            <td className="p-2 text-slate-400 text-[11px]">{line.groupName}</td>
+                                            <td className="p-2 text-center font-mono font-black text-indigo-300 text-xs">
+                                              {line.quantity} <span className="text-[10px] text-slate-400 font-normal">{line.unit}</span>
+                                            </td>
+                                            <td className="p-2 text-center">
+                                              <span className="bg-indigo-950/60 text-indigo-300 border border-indigo-800/40 px-2 py-0.5 rounded text-[10px] font-bold">
+                                                {line.systemUnit || line.unit}
+                                              </span>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     );
-                  })
-                )}
-              </div>
+                  })()}
+                </div>
+              )}
             </>
           ) : (
             /* Empty State */
@@ -1783,16 +2300,26 @@ export const PickingWaveScreen: React.FC<PickingWaveScreenProps> = ({
               </div>
               <div className="space-y-1">
                 <h3 className="text-lg font-black text-white">
-                  {isRtl ? 'ابدأ بتكوين قائمة انتقاء جديدة من الإكسيل' : 'Start a New Batch Picking Wave'}
+                  {isRtl ? 'ابدأ بتكوين قائمة انتقاء مجمعة لطلبات اليوم' : 'Start a Consolidated Daily Picking Wave'}
                 </h3>
                 <p className="text-xs text-slate-400 leading-relaxed">
                   {isRtl 
-                    ? 'قم برفع ملف إكسيل يحتوي على بيانات كميات الفواتير مفصلة، وسيقوم النظام فوراً بتجميع الكميات ذات الكود الواحد، واحتساب الكراتين والعبوات، وإسنادها للعمال حسب مستويات الخبرة والصعوبة.'
-                    : 'Upload a multi-invoice Excel file to aggregate item quantities, compute packaging breakdown, and assign wave tasks to workers based on experience.'}
+                    ? 'يتم تجميع كميات كل صنف من كافة الفواتير المسجلة للحصول على قائمة الكميات الإجمالية لطلبات اليوم كمرحلة أولى، ثم يتم تحضير وفرز كمية كل فاتورة منفردة في المرحلة الثانية وفقاً لشروط ضم العبوات ووحدة الصرف المعرفة.'
+                    : 'Aggregate item quantities across all invoices for consolidated bulk picking in Phase 1, then sort and pack individual invoices in Phase 2.'}
                 </p>
               </div>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={handleGenerateFromMasterItems}
+                  disabled={isUploading}
+                  className="w-full sm:w-auto bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-5 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-lg ring-1 ring-purple-400 active:scale-95"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
+                  <span>{isRtl ? '⚡ تجميع فواتير اليوم المسجلة مباشرة' : 'Generate Wave from System Invoices'}</span>
+                </button>
+
                 <label className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all shadow-lg ring-1 ring-indigo-400">
                   <Upload className="w-4 h-4" />
                   <span>{isRtl ? 'رفع ملف إكسيل الفواتير' : 'Upload Invoices Excel'}</span>
@@ -1809,7 +2336,7 @@ export const PickingWaveScreen: React.FC<PickingWaveScreenProps> = ({
                   className="w-full sm:w-auto bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
                 >
                   <Download className="w-4 h-4 text-slate-400" />
-                  <span>{isRtl ? 'تحميل نموذج إكسيل تجريبي' : 'Download Sample'}</span>
+                  <span>{isRtl ? 'تحميل نموذج إكسيل' : 'Download Template'}</span>
                 </button>
               </div>
             </div>
